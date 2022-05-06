@@ -1,4 +1,4 @@
-# Pickhardt Payment Package
+# Pickhardt Payments Package
 
 The `pickhardtpayments` package is a collection of classes and interfaces that help you to test and implement your dialect of [Pickhardt Payments](https://ln.rene-pickhardt.de#PickhardtPayments) into your on Lightning Application.
 
@@ -50,7 +50,7 @@ from pickhardtpayments.SyncSimulatedPaymentSession import SyncSimulatedPaymentSe
 channel_graph = ChannelGraph("listchannels20220412.json")
 
 uncertainty_network = UncertaintyNetwork(channel_graph)
-
+oracle_lightning_network = OracleLightningNetwork(channel_graph)
 #we create ourselves a payment session which in this case operates by sending out the onions
 #sequentially 
 payment_session = SyncSimulatedPaymentSession(oracle_lightning_network, 

@@ -24,7 +24,7 @@ payment_session.forget_information()
 
 #we run the simulation of pickhardt payments and track all the results
 
-exit(0)
+exit()
 
 #
 # Simulation part will follow here.

@@ -31,10 +31,6 @@ class UncertaintyChannel(Channel):
     TOTAL_NUMBER_OF_SATS = 21_000_000 * 100_000_000
     MAX_CHANNEL_SIZE = 15_000_000_000  # 150 BTC
 
-    def __init__(self, cln_jsn):
-        super().__init__(cln_jsn)
-        self.forget_information()
-
     def __init__(self, channel: Channel):
         super().__init__(channel.cln_jsn)
         self.forget_information()

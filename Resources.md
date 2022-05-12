@@ -16,16 +16,16 @@
 * Most comprehensive source of original information is probably at: https://www.mit.edu/~dimitrib/home.html (The work body of Dimitri Bertsekas is truely impressive)
 
 ## LN implementations doing related stuff: 
-https://github.com/C-Otto/lnd-manageJ/issues/6 (currently closest to being usable on mainnet)
-https://medium.com/blockstream/c-lightning-v0-10-2-bitcoin-dust-consensus-rule-33e777d58657 (c-lightning integration)
-https://github.com/lightningdevkit/rust-lightning/pull/1227 (LDK has probabilistic payments with uncertainty )
-https://github.com/ACINQ/eclair/pull/2071#pullrequestreview-941902333 (Eclair does similar stuff like our uncertainty network)
-https://github.com/lightningdevkit/rust-lightning/issues/1170#issuecomment-972396747 
-https://github.com/lightningnetwork/lnd/issues/5988 (lnd wants to include some of the results)
-https://github.com/ElementsProject/lightning/issues/4920 (Proposal for Uncertainty Network)
-https://github.com/lightningnetwork/lnd/issues/5988 (add probabilistic path finding)
-https://github.com/lightningnetwork/lnd/issues/5746 (add MPP API)
-https://github.com/lightningnetwork/lnd/issues/4203 (add optimal splitting / payment flows)
+* https://github.com/C-Otto/lnd-manageJ/issues/6 (currently closest to being usable on mainnet)
+* https://medium.com/blockstream/c-lightning-v0-10-2-bitcoin-dust-consensus-rule-33e777d58657 (c-lightning integration)
+* https://github.com/lightningdevkit/rust-lightning/pull/1227 (LDK has probabilistic payments with uncertainty )
+* https://github.com/ACINQ/eclair/pull/2071#pullrequestreview-941902333 (Eclair does similar stuff like our uncertainty network)
+* https://github.com/lightningdevkit/rust-lightning/issues/1170#issuecomment-972396747 
+* https://github.com/lightningnetwork/lnd/issues/5988 (lnd wants to include some of the results)
+* https://github.com/ElementsProject/lightning/issues/4920 (Proposal for Uncertainty Network)
+* https://github.com/lightningnetwork/lnd/issues/5988 (add probabilistic path finding)
+* https://github.com/lightningnetwork/lnd/issues/5746 (add MPP API)
+* https://github.com/lightningnetwork/lnd/issues/4203 (add optimal splitting / payment flows)
 
 ## Other: 
 Summary by Rusty: https://twitter.com/rusty_twit/status/1519547447324086272 

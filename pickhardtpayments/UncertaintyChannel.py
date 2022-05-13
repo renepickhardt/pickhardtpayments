@@ -81,7 +81,7 @@ class UncertaintyChannel(Channel):
 
     def allocate_amount(self, amt: int):
         """
-        assign or remove ammount that is assigned to be `in_flight`.
+        assign or remove amount that is assigned to be `in_flight`.
         """
         self.in_flight += amt
         if self.in_flight < 0:

@@ -1,5 +1,3 @@
-from typing import List
-
 from .ChannelGraph import ChannelGraph
 from .OracleChannel import OracleChannel
 import networkx as nx
@@ -15,7 +13,7 @@ class OracleLightningNetwork(ChannelGraph):
         for src, dest, short_channel_id, channel in channel_graph.network.edges(data="channel", keys=True):
             oracle_channel = None
 
-            # If Channel in opposite direction already exists with liquidity information match the channel
+            # If Channel in oposite direction already exists with liquidity information match the channel
             if self._network.has_edge(dest, src):
                 if short_channel_id in self._network[dest][src]:
                     capacity = channel.capacity
@@ -37,18 +35,14 @@ class OracleLightningNetwork(ChannelGraph):
         return self._network
 
     def send_onion(self, path, amt):
-        """
-
-        :rtype: object
-        """
         for channel in path:
             oracle_channel = self.get_channel(
                 channel.src, channel.dest, channel.short_channel_id)
             success_of_probe = oracle_channel.can_forward(
-                channel.in_flight + amt)
+                channel.in_flight+amt)
             # print(channel,amt,success_of_probe)
             channel.update_knowledge(amt, success_of_probe)
-            if not success_of_probe:
+            if success_of_probe == False:
                 return False, channel
         return True, None
 
@@ -61,7 +55,7 @@ class OracleLightningNetwork(ChannelGraph):
         """
         test_network = nx.DiGraph()
         for src, dest, channel in self.network.edges(data="channel"):
-            # liquidity = 0
+            #liqudity = 0
             # for channel in channels:
             if channel.base_fee > base_fee:
                 continue
@@ -77,23 +71,3 @@ class OracleLightningNetwork(ChannelGraph):
 
         mincut, _ = nx.minimum_cut(test_network, source, destination)
         return mincut
-
-    def settle_payment(self, path: List[OracleChannel], payment_amount: int):
-        """
-        receives a List of channels and payment amount and adjusts the balances of the channels along the path.
-
-        settle_payment should only be called after all send_onions for a payment terminated successfully!
-        # TODO testing
-        """
-        for channel in path:
-            settlement_channel = self.get_channel(channel.src, channel.dest, channel.short_channel_id)
-            return_settlement_channel = self.get_channel(channel.dest, channel.src, channel.short_channel_id)
-            if settlement_channel.actual_liquidity > payment_amount:
-                # decrease channel balance in sending channel by amount
-                settlement_channel.actual_liquidity = settlement_channel.actual_liquidity - payment_amount
-                # increase channel balance in the other direction by amount
-                return_settlement_channel.actual_liquidity = return_settlement_channel.actual_liquidity + payment_amount
-            else:
-                raise Exception("""Channel liquidity on Channel {} is lower than payment amount.
-                    \nPayment cannot settle.""".format(channel.short_channel_id))
-        return 0

@@ -42,3 +42,7 @@ class OracleChannel(Channel):
             return True
         else:
             return False
+
+    # setter for actual liquidity
+    def set_actual_liquidity(self, amt: int):
+        self._actual_liquidity = amt

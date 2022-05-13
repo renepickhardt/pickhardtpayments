@@ -2,8 +2,6 @@
 __pycache__
 .idea
 pickhardtpayments/pickhardtpayments.egg-info
-pickhardtpayments/__pycache__
-
 # not including large file with Channel Graph
 listchannels*.json
 

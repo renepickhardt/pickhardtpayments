@@ -5,7 +5,7 @@ import random
 
 class OracleChannel(Channel):
     """
-    An OracleChannel is used in experiments and Simulations to form the (Oracle)LightningNetwork.
+    An OracleChannel us used in experiments and Simulations to form the (Oracle)LightningNetwork.
 
     It contains a ground truth about the Liquidity of a channel
     """
@@ -17,15 +17,15 @@ class OracleChannel(Channel):
             self._actual_liquidity = random.randint(0, self.capacity)
 
     def __str__(self):
-        return super().__str__() + " actual Liquidity: {}".format(self.actual_liquidity)
+        return super().__str__()+" actual Liquidity: {}".format(self.actual_liquidity)
 
     @property
     def actual_liquidity(self):
         """
         Tells us the actual liquidity according to the oracle. 
 
-        This is useful for experiments but must of course not be used in routing and is also
-        not available if mainnet remote channels are being used.
+        This is usful for experiments but must of course not be used in routing and is also
+        not a vailable if mainnet remote channels are being used.
         """
         return self._actual_liquidity
 

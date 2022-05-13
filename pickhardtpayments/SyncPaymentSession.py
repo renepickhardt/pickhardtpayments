@@ -39,6 +39,8 @@ class SyncPaymentSession(SyncSimulatedPaymentSession):
 
         """
         print("this method 'pickhardt_pay' in 'SyncPaymentSession' overloads original pickhardt_pay and will not only send onions but sendpay")
+        # TODO rework pay method to not only onionsend but pay; make sure that OracleLightningNetwork is updated correspondingly
+
         return
         entropy_start = self._uncertainty_network.entropy()
         start = time.time()

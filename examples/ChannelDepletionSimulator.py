@@ -1,3 +1,4 @@
+import random
 import sys
 
 sys.path.append(r'../pickhardtpayments')
@@ -21,29 +22,33 @@ sim_session = SyncPaymentSession(oracle_lightning_network,
                                  uncertainty_network,
                                  prune_network=False)
 
-# we need to make sure we forget all learnt information on the Uncertainty Nework
+# we need to make sure we forget all learnt information on the Uncertainty Network
 sim_session.forget_information()
 
 # we run the simulation of pickhardt payments and track all the results
 
-#
-# Simulation part will follow here.
-#
-# n times:
-#   "randomly" select paying node
-#   "randomly" select receiving node
-#   decide on payment_amount
-#   pay! (not just send onion)
-#   update OracleLightningNetwork
-#
-# observe and analyse
-
-
-# Rene Pickhardt's public node key
-RENE = "03efccf2c383d7bf340da9a3f02e2c23104a0e4fe8ac1a880c8e2dc92fbdacd9df"
-# Carsten Otto's public node key
-C_OTTO = "027ce055380348d7812d2ae7745701c9f93e70c1adeb2657f053f91df4f2843c71"
+# TODO randomize payment amount
 tested_amount = 10_000_000  # 10 million sats
 
-# invoking new payment method, pickhardt_pay is overloaded
-sim_session.pickhardt_pay(RENE, C_OTTO, tested_amount, mu=0, base=0)
+
+# sampling two nodes from ChannelGraph
+try:
+    # casting channel_graph to list to avoid deprecation warning for python 3.9
+    sampled_nodes = random.sample(list(channel_graph.network.nodes), 2)
+    # TODO how to decide on number of runs?
+    for n in range(10):
+        # TODO rework pay method to not only onionsend but pay
+        sim_session.pickhardt_pay(sampled_nodes[0], sampled_nodes[1], tested_amount, mu=0, base=0)
+        # TODO update OracleLightningNetwork to reflect payment (make sure back channel is also updated)
+        # TODO decide on method to save
+
+except ValueError:
+    print("graph has less than two nodes")
+    exit()
+
+
+
+
+
+
+

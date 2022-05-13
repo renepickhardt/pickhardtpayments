@@ -1,14 +1,12 @@
 import random
 import sys
-
 sys.path.append(r'../pickhardtpayments')
 from pickhardtpayments.ChannelGraph import ChannelGraph
 from pickhardtpayments.UncertaintyNetwork import UncertaintyNetwork
 from pickhardtpayments.OracleLightningNetwork import OracleLightningNetwork
-from pickhardtpayments.SyncSimulatedPaymentSession import SyncSimulatedPaymentSession
 from pickhardtpayments.SyncPaymentSession import SyncPaymentSession
 
-# we first need to import the chanenl graph from c-lightning jsondump
+# we first need to import the channel graph from c-lightning json dump
 # you can get your own data set via:
 # $: lightning-cli listchannels > listchannels20220412.json
 # alternatively you can go to https://ln.rene-pickhardt.de to find a data dump
@@ -31,24 +29,21 @@ sim_session.forget_information()
 tested_amount = 10_000_000  # 10 million sats
 
 
-# sampling two nodes from ChannelGraph
+
+# Attempting to sample two nodes from ChannelGraph
+# If unsuccessful, exit with comment.
 try:
     # casting channel_graph to list to avoid deprecation warning for python 3.9
     sampled_nodes = random.sample(list(channel_graph.network.nodes), 2)
     # TODO how to decide on number of runs?
     for n in range(10):
+        # TODO register OracleLightningNetwork pre simulation
         # TODO rework pay method to not only onionsend but pay
         sim_session.pickhardt_pay(sampled_nodes[0], sampled_nodes[1], tested_amount, mu=0, base=0)
         # TODO update OracleLightningNetwork to reflect payment (make sure back channel is also updated)
         # TODO decide on method to save
+        # TODO register OracleLightningNetwork post simulation (and create diff OLN?)
 
 except ValueError:
     print("graph has less than two nodes")
     exit()
-
-
-
-
-
-
-

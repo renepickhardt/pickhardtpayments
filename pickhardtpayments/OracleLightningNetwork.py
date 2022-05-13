@@ -71,3 +71,8 @@ class OracleLightningNetwork(ChannelGraph):
 
         mincut, _ = nx.minimum_cut(test_network, source, destination)
         return mincut
+
+    def register_payment(self, channel: OracleChannel, actual_liquidity: int):
+        # TODO register payment
+        print("=> register payment function here")
+

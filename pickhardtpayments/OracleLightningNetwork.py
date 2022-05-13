@@ -16,7 +16,7 @@ class OracleLightningNetwork(ChannelGraph):
         for src, dest, short_channel_id, channel in channel_graph.network.edges(data="channel", keys=True):
             oracle_channel = None
 
-            # If Channel in opposite direction already exists with liquidity information match the channel
+            # If Channel in opposite direction already exists with liquidity information, match the channel
             if self._network.has_edge(dest, src):
                 if short_channel_id in self._network[dest][src]:
                     capacity = channel.capacity

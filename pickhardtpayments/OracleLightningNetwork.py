@@ -86,7 +86,7 @@ class OracleLightningNetwork(ChannelGraph):
             # print("path on UncertaintyNetwork: {}".format(channel.short_channel_id))
             # print("path on OracleLN: {}".format(settlement_channel.short_channel_id))
             if settlement_channel.actual_liquidity > payment_amount:
-                settlement_channel.set_actual_liquidity = settlement_channel.actual_liquidity - payment_amount
+                settlement_channel.actual_liquidity = settlement_channel.actual_liquidity - payment_amount
             else:
                 print("=== CHANNEL EXHAUSTED ===")
 

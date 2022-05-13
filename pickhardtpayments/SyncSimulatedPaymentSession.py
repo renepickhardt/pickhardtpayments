@@ -249,7 +249,7 @@ class SyncSimulatedPaymentSession():
             if success:
                 self._uncertainty_network.allocate_amount_on_path(
                     attempt["path"], attempt["amount"])
-                self._oracle.register_payment(attempt["path"], attempt["amount"])
+                self._oracle.settle_payment(attempt["path"], attempt["amount"])
 
     def _evaluate_attempts(self, payments):
         """

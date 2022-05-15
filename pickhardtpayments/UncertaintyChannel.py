@@ -16,10 +16,10 @@ class UncertaintyChannel(Channel):
     on the capacity of the channel the class contains the `capacity` as seen in the funding tx output.
 
     As we also optimize for fees and want to be able to compute the fees of a flow the classe
-    contains information for the feerate (`ppm`) and the base_fee (`base`). 
+    contains information for the feerate (`ppm`) and the base_fee (`base`).
 
     Most importantly the class stores our belief about the liquidity information of a channel.
-    This is done by reducing the uncertainty interval from [0,`capacity`] to 
+    This is done by reducing the uncertainty interval from [0,`capacity`] to
     [`min_liquidity`, `max_liquidity`].
     Additionally we need to know how many sats we currently have allocated via outstanding onions
     to the channel which is stored in `inflight`.
@@ -58,19 +58,40 @@ class UncertaintyChannel(Channel):
     # FIXME: store timestamps when using setters so that we know when we learnt our belief
     @min_liquidity.setter
     def min_liquidity(self, value: int):
+        if type(value) is not int:
+            raise TypeError(
+                "value {} needs to be an int but {} given".format(value, type(value)))
+        if value < 0:
+            raise ValueError(
+                "Cannot set minimum liquidity to {} beacuse it is lower than 0".format(value))
+        if value > self.max_liquidity:
+            raise ValueError("Cannot set minimum liquidity to {} as that is higher than max_liquidity ({})".format(
+                value, self.max_liquidity))
         self._min_liquidity = value
 
     # FIXME: store timestamps when using setters so that we know when we learnt our belief
-    @max_liquidity.setter
+    @ max_liquidity.setter
     def max_liquidity(self, value: int):
+        if type(value) is not int:
+            raise TypeError(
+                "value {} needs to be an int but {} given".format(value, type(value)))
+        if value < 0:
+            raise ValueError(
+                "Cannot set maximum liquidity to {} beacuse it is lower than 0".format(value))
+        if value > self.capacity:
+            raise ValueError(
+                "Cannot set maximum liquidity to {} beacuse it is higher than the capacity of {}".format(value, self.capacity))
+        if value < self.min_liquidity:
+            raise ValueError("Cannot set maximum liquidity to {} as that is lower than min_liquidity ({})".format(
+                value, self.min_liquidity))
         self._max_liquidity = value
 
     # FIXME: store timestamps when using setters so that we know when we learnt our belief
-    @in_flight.setter
+    @ in_flight.setter
     def in_flight(self, value: int):
         self._in_flight = value
 
-    @property
+    @ property
     def conditional_capacity(self, respect_inflight=True):
         # FIXME: make sure if respect_inflight=True is needed for linearized cost
         if respect_inflight == False:
@@ -91,12 +112,12 @@ class UncertaintyChannel(Channel):
     # FIXME: store timestamps when using setters so that we know when we learnt our belief
     def forget_information(self):
         """
-        resets the information that we belief to have about the channel. 
+        resets the information that we belief to have about the channel.
         """
-        self.min_liquidity = 0
-        self.max_liquidity = self.capacity
+        self._min_liquidity = 0
+        self._max_liquidity = self.capacity
         # FIXME: Is there a case where we want to keep inflight information but reset information?
-        self.in_flight = 0
+        self._in_flight = 0
 
     def entropy(self):
         """
@@ -117,7 +138,7 @@ class UncertaintyChannel(Channel):
         actual min cost flow computation as we linearize this to an integer unit cost
 
         In particular the conditional probability P(X>=a | min_liquidity < X < max_liquidity)
-        is computed based on our belief also respecting how many satoshis we have currently 
+        is computed based on our belief also respecting how many satoshis we have currently
         outstanding and allocated. Thus it is possible that testing for the `amt=0` that the success probability
         is zero and in particular not `1`.
 
@@ -183,7 +204,7 @@ class UncertaintyChannel(Channel):
         """
         Linearizing the routing cost by ignoring the base fee.
 
-        Note that one can still include channels with small base fees to the computation the base 
+        Note that one can still include channels with small base fees to the computation the base
         will just be excluded in the computation and has to be paid later anyway. If as developers
         we go down this road this will allow routing node operators to game us with the base fee
         thus it seems reasonable in routing computations to just ignore channels that charge a base fee.
@@ -231,26 +252,28 @@ class UncertaintyChannel(Channel):
         return pieces
 
     """
-    #FIXME: interestingly the following feature engineering does not work at all
-    
-    TODO: Look at more standard Univariate Transformations on Numerical Data techniques as described at 
+    # FIXME: interestingly the following feature engineering does not work at all
+
+    TODO: Look at more standard Univariate Transformations on Numerical Data techniques as described at
     https://www.kaggle.com/code/milankalkenings/comprehensive-tutorial-feature-engineering/notebook
-    
+
     def get_piecewise_linearized_costs(self,number_of_pieces : int = DEFAULT_N,
                                        mu : int = DEFAULT_MU,
                                        quantization : int = DEFAULT_QUANTIZATION):
-        #FIXME: compute smarter linearization eg: http://www.iaeng.org/publication/WCECS2008/WCECS2008_pp1191-1194.pdf
+        # FIXME: compute smarter linearization eg: http://www.iaeng.org/publication/WCECS2008/WCECS2008_pp1191-1194.pdf
         pieces = []*number_of_pieces
 
-        #using certainly available liquidity costs us nothing but fees
+        # using certainly available liquidity costs us nothing but fees
         if int((self.min_liquidity-self.in_flight)/quantization) > 0:
             uncertintay_unit_cost = 0 #is zero as we have no uncertainty in this case!
-            pieces.append((int((self.min_liquidity-self.in_flight)/quantization),uncertintay_unit_cost + mu * self.linearized_integer_routing_unit_cost()))
+            pieces.append((int((self.min_liquidity-self.in_flight)/quantization),
+                          uncertintay_unit_cost + mu * self.linearized_integer_routing_unit_cost()))
             number_of_pieces-=1
 
         # FIXME: include the in_flight stuff
         if int(self.conditional_capacity/quantization) > 0 and number_of_pieces > 0:
-            capacity = int(self.conditional_capacity/(number_of_pieces*quantization))
+            capacity = int(self.conditional_capacity/ \
+                           (number_of_pieces*quantization))
             uncertintay_unit_cost = self.linearized_integer_uncertainty_unit_cost()
             for i in range(number_of_pieces):
                 a = (i+1)*uncertintay_unit_cost+1
@@ -278,7 +301,7 @@ class UncertaintyChannel(Channel):
         conducts n probes of channel via binary search starting from our belief
 
         This of course only learns `n` bits if we use a uniform success probability as a prior
-        thus this method will not work if a different prior success probability is assumed 
+        thus this method will not work if a different prior success probability is assumed
         """
         if n <= 0:
             return

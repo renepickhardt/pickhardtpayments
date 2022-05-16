@@ -16,9 +16,9 @@ from OracleLightningNetwork import OracleLightningNetwork
 
 from ortools.graph import pywrapgraph
 
+from typing import List
 import time
 import networkx as nx
-import json
 
 DEFAULT_BASE_THRESHOLD = 0
 

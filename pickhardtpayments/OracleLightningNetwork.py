@@ -81,21 +81,7 @@ class OracleLightningNetwork(ChannelGraph):
 
     def settle_payment(self, path: OracleChannel, payment_amount: int):
         """
-        receives a channel and a payment amount and adjusts the balances of the channels along the path.
-
-        settle_payment should only be called after send_onion terminated successfully!
-        There is currently no further exception handling if along the path channels do not provide
-        enough liquidity!
-        # TODO testing
-        """
-        for channel in path:
-            settlement_channel = self.get_channel(channel.src, channel.dest, channel.short_channel_id)
-            # print("path on UncertaintyNetwork: {}".format(channel.short_channel_id))
-            # print("path on OracleLN: {}".format(settlement_channel.short_channel_id))
-            if settlement_channel.actual_liquidity > payment_amount:
-                settlement_channel.actual_liquidity = settlement_channel.actual_liquidity - payment_amount
-            else:
-                print("=== CHANNEL EXHAUSTED ===")
+        receives a dictionary with channels and payment amounts and adjusts the balances of the channels along the path.
 
         settle_payment should only be called after all send_onions for a payment terminated successfully!
         # TODO testing
@@ -111,4 +97,3 @@ class OracleLightningNetwork(ChannelGraph):
             else:
                 raise Exception("""Channel liquidity on Channel {} is lower than payment amount.
                     \nPayment cannot settle.""".format(channel.short_channel_id))
-        return 0

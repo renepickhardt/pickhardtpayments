@@ -3,12 +3,9 @@ from .OracleLightningNetwork import OracleLightningNetwork
 
 from ortools.graph import pywrapgraph
 
-
 from typing import List
 import time
 import networkx as nx
-import json
-
 
 DEFAULT_BASE_THRESHOLD = 0
 
@@ -48,7 +45,8 @@ class SyncSimulatedPaymentSession():
             self._mcf_id[node_id] = k
             self._node_key[k] = node_id
 
-    def _prepare_mcf_solver(self, src, dest, amt: int = 1, mu: int = 100_000_000, base_fee: int = DEFAULT_BASE_THRESHOLD):
+    def _prepare_mcf_solver(self, src, dest, amt: int = 1, mu: int = 100_000_000,
+                            base_fee: int = DEFAULT_BASE_THRESHOLD):
         """
         computes the uncertainty network given our prior belief and prepares the min cost flow solver
 
@@ -102,7 +100,7 @@ class SyncSimulatedPaymentSession():
         The path is a list of node ids. Each call returns a tuple src, dest of an edge in the path
         """
         for i in range(1, len(path)):
-            src = path[i-1]
+            src = path[i - 1]
             dest = path[i]
             yield (src, dest)
 
@@ -113,9 +111,9 @@ class SyncSimulatedPaymentSession():
         min cost flow solver produced
         """
         channel_path = []
-        bottleneck = 2**63
+        bottleneck = 2 ** 63
         for src, dest in self._next_hop(path):
-            w = 2**63
+            w = 2 ** 63
             c = None
             flow = 0
             for sid in G[src][dest].keys():
@@ -197,7 +195,7 @@ class SyncSimulatedPaymentSession():
         self._prepare_mcf_solver(src, dest, amt, mu, base)
 
         start = time.time()
-        #print("solving mcf...")
+        # print("solving mcf...")
         status = self._min_cost_flow.Solve()
 
         if status != self._min_cost_flow.OPTIMAL:
@@ -207,7 +205,7 @@ class SyncSimulatedPaymentSession():
 
         paths = self._dissect_flow_to_paths(src, dest)
         end = time.time()
-        return paths, end-start
+        return paths, end - start
 
     def _estimate_payment_statistics(self, paths):
         """
@@ -254,9 +252,6 @@ class SyncSimulatedPaymentSession():
                     attempt["path"], attempt["amount"])
                 settled_onions.append(payments[key])
 
-
-
-
     def _evaluate_attempts(self, payments):
         """
         helper function to collect statistics about attempts and print them
@@ -287,7 +282,7 @@ class SyncSimulatedPaymentSession():
             total_fees += fee
             expected_sats_to_deliver += probability * amount
             print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
-                probability*100, amount, len(path), int(fee*1000_000/amount)))
+                probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
             paid_fees += fee
 
         if has_failed_attempt:
@@ -305,21 +300,21 @@ class SyncSimulatedPaymentSession():
                 total_fees += fee
                 expected_sats_to_deliver += probability * amount
                 print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5} ".format(
-                    probability*100, amount, len(path), int(fee*1000_000/amount)))
+                    probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
                 number_failed_paths += 1
                 residual_amt += amount
 
         print("\nAttempt Summary:")
         print("=================")
         print("\nTried to deliver {:10} sats".format(amt))
-        fraction = expected_sats_to_deliver*100./amt
+        fraction = expected_sats_to_deliver * 100. / amt
         print("expected to deliver {:10} sats \t({:4.2f}%)".format(
             int(expected_sats_to_deliver), fraction))
-        fraction = (amt-residual_amt)*100./(amt)
+        fraction = (amt - residual_amt) * 100. / (amt)
         print("actually delivered {:10} sats \t({:4.2f}%)".format(
-            amt-residual_amt, fraction))
+            amt - residual_amt, fraction))
         print("deviation: {:4.2f}".format(
-            (amt-residual_amt)/(expected_sats_to_deliver+1)))
+            (amt - residual_amt) / (expected_sats_to_deliver + 1)))
         print("planned_fee: {:8.3f} sat".format(total_fees))
         print("paid fees: {:8.3f} sat".format(paid_fees))
         return residual_amt, paid_fees, len(payments), number_failed_paths
@@ -357,7 +352,7 @@ class SyncSimulatedPaymentSession():
         # are too low or residual amounts decrease to slowly
         settled_onions = []
         while amt > 0 and cnt < 10:
-            print("Round number: ", cnt+1)
+            print("Round number: ", cnt + 1)
             print("Try to deliver", amt, "satoshi:")
 
             # transfer to a min cost flow problem and round the solver
@@ -399,10 +394,10 @@ class SyncSimulatedPaymentSession():
         print("Number of onions sent: ", number_number_of_onions)
         print("Number of failed onions: ", total_number_failed_paths)
         print("Failure rate: {:4.2f}% ".format(
-            total_number_failed_paths*100./number_number_of_onions))
-        print("total runtime (including inefficient memory management): {:4.3f} sec".format(
-            end-start))
-        print("Learnt entropy: {:5.2f} bits".format(entropy_start-entropy_end))
-        print("Fees for successful delivery: {:8.3f} sat --> {} ppm".format(
-            total_fees, int(total_fees*1000*1000/full_amt)))
+            total_number_failed_paths * 100. / number_number_of_onions))
+        print("total runtime (including inefficient memory managment): {:4.3f} sec".format(
+            end - start))
+        print("Learnt entropy: {:5.2f} bits".format(entropy_start - entropy_end))
+        print("Fees for successfull delivery: {:8.3f} sat --> {} ppm".format(
+            total_fees, int(total_fees * 1000 * 1000 / full_amt)))
         print("used mu:", mu)

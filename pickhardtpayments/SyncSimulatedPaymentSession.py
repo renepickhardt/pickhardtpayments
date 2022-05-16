@@ -7,6 +7,7 @@ from ortools.graph import pywrapgraph
 from typing import List
 import time
 import networkx as nx
+import json
 
 
 DEFAULT_BASE_THRESHOLD = 0
@@ -17,11 +18,11 @@ class SyncSimulatedPaymentSession():
     A PaymentSession is used to create the min cost flow problem from the UncertaintyNetwork
 
     This happens by adding several parallel arcs coming from the piece wise linearization of the
-    UncertaintyChannel to the min_cost_flow object. 
+    UncertaintyChannel to the min_cost_flow object.
 
     The main API call ist `pickhardt_pay` which invokes a sequential loop to conduct trial and error
     attempts. The loop could easily send out all onions concurrently but this does not make sense
-    against the simulated OracleLightningNetwork. 
+    against the simulated OracleLightningNetwork.
     """
 
     def __init__(self,
@@ -98,7 +99,7 @@ class SyncSimulatedPaymentSession():
         """
         generator to iterate through edges indexed by node id of paths
 
-        The path is a list of node ids. Each call returns a tuple src, dest of an edge in the path    
+        The path is a list of node ids. Each call returns a tuple src, dest of an edge in the path
         """
         for i in range(1, len(path)):
             src = path[i-1]
@@ -108,7 +109,7 @@ class SyncSimulatedPaymentSession():
     def _make_channel_path(self, G: nx.MultiDiGraph, path: List[str]):
         """
         network x returns a path as a list of node_ids. However, we need a list of `UncertaintyChannels`
-        Since the graph has parallel edges it is quite some work to get the actual channels that the 
+        Since the graph has parallel edges it is quite some work to get the actual channels that the
         min cost flow solver produced
         """
         channel_path = []
@@ -134,7 +135,7 @@ class SyncSimulatedPaymentSession():
         A standard algorithm to dissect a flow into several paths.
 
         FIXME: Note that this dissection while accurate is probably not optimal in practise.
-        As noted in our Probabilistic payment delivery paper the payment process is a bernoulli trial 
+        As noted in our Probabilistic payment delivery paper the payment process is a bernoulli trial
         and I assume it makes sense to dissect the flow into paths of similar likelihood to make most
         progress but this is a mere conjecture at this point. I expect quite a bit of research will be
         necessary to resolve this issue.
@@ -234,13 +235,15 @@ class SyncSimulatedPaymentSession():
 
         return payments
 
-    def _attempt_payments(self, payments):
+    def _attempt_payments(self, payments, settled_onions):
         """
         we attempt all planned payments and test the success against the oracle in particular this
         method changes - depending on the outcome of each payment - our belief about the uncertainty
-        in the UncertaintyNetwork
+        in the UncertaintyNetwork.
+        successful onions are collected to be transacted on the OracleNetwork if complete payment can be delivered
         """
         # test actual payment attempts
+
         for key, attempt in payments.items():
             success, erring_channel = self._oracle.send_onion(
                 attempt["path"], attempt["amount"])
@@ -249,7 +252,10 @@ class SyncSimulatedPaymentSession():
             if success:
                 self._uncertainty_network.allocate_amount_on_path(
                     attempt["path"], attempt["amount"])
-                self._oracle.settle_payment(attempt["path"], attempt["amount"])
+                settled_onions.append(payments[key])
+
+
+
 
     def _evaluate_attempts(self, payments):
         """
@@ -346,9 +352,10 @@ class SyncSimulatedPaymentSession():
         total_number_failed_paths = 0
 
         # This is the main payment loop. It is currently blocking and synchronous but may be
-        # implemented in a concurrent way. Also, we stop after 10 rounds which is pretty arbitrary
-        # a better stop criteria would be if we compute infeasible flows or if the probabilities
+        # implemented in a concurrent way. Also we stop after 10 rounds which is pretty arbitrary
+        # a better stop criteria would be if we compute infeasable flows or if the probabilities
         # are too low or residual amounts decrease to slowly
+        settled_onions = []
         while amt > 0 and cnt < 10:
             print("Round number: ", cnt+1)
             print("Try to deliver", amt, "satoshi:")
@@ -360,8 +367,8 @@ class SyncSimulatedPaymentSession():
             # compute some statistics about candidate paths
             payments = self._estimate_payment_statistics(paths)
 
-            # make attempts and update our information about the UncertaintyNetwork
-            self._attempt_payments(payments)
+            # make attempts and update our information about the UncertaintyNetwork and track settled onions
+            self._attempt_payments(payments, settled_onions)
 
             # run some simple statistics and depict them
             amt, paid_fees, num_paths, number_failed_paths = self._evaluate_attempts(
@@ -373,6 +380,17 @@ class SyncSimulatedPaymentSession():
             total_number_failed_paths += number_failed_paths
             total_fees += paid_fees
             cnt += 1
+
+        # When residual amount is 0 / enough successful onions have been found, then settle payment. Else drop onions.
+        if amt == 0:
+            # print("{} onions to settle.".format(len(settled_onions)))
+            for onion in settled_onions:
+                try:
+                    self._oracle.settle_payment(onion["path"], onion["amount"])
+                except Exception as e:
+                    print(e)
+                    return -1
+
         end = time.time()
         entropy_end = self._uncertainty_network.entropy()
         print("SUMMARY:")

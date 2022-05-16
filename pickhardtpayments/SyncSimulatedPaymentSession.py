@@ -7,6 +7,7 @@ from ortools.graph import pywrapgraph
 from typing import List
 import time
 import networkx as nx
+import json
 
 
 DEFAULT_BASE_THRESHOLD = 0
@@ -234,13 +235,15 @@ class SyncSimulatedPaymentSession():
 
         return payments
 
-    def _attempt_payments(self, payments):
+    def _attempt_payments(self, payments, settled_onions):
         """
         we attempt all planned payments and test the success against the oracle in particular this
         method changes - depending on the outcome of each payment - our belief about the uncertainty
-        in the UncertaintyNetwork
+        in the UncertaintyNetwork.
+        successful onions are collected to be transacted on the OracleNetwork if complete payment can be delivered
         """
         # test actual payment attempts
+
         for key, attempt in payments.items():
             success, erring_channel = self._oracle.send_onion(
                 attempt["path"], attempt["amount"])
@@ -249,7 +252,10 @@ class SyncSimulatedPaymentSession():
             if success:
                 self._uncertainty_network.allocate_amount_on_path(
                     attempt["path"], attempt["amount"])
-                self._oracle.settle_payment(attempt["path"], attempt["amount"])
+                settled_onions.append(payments[key])
+
+
+
 
     def _evaluate_attempts(self, payments):
         """
@@ -310,7 +316,7 @@ class SyncSimulatedPaymentSession():
         print("expected to deliver {:10} sats \t({:4.2f}%)".format(
             int(expected_sats_to_deliver), fraction))
         fraction = (amt-residual_amt)*100./(amt)
-        print("actually deliverd {:10} sats \t({:4.2f}%)".format(
+        print("actually delivered {:10} sats \t({:4.2f}%)".format(
             amt-residual_amt, fraction))
         print("deviation: {:4.2f}".format(
             (amt-residual_amt)/(expected_sats_to_deliver+1)))
@@ -348,7 +354,8 @@ class SyncSimulatedPaymentSession():
         # This is the main payment loop. It is currently blocking and synchronous but may be
         # implemented in a concurrent way. Also we stop after 10 rounds which is pretty arbitrary
         # a better stop criteria would be if we compute infeasable flows or if the probabilities
-        # are to low or residual amounts decrease to slowly
+        # are too low or residual amounts decrease to slowly
+        settled_onions = []
         while amt > 0 and cnt < 10:
             print("Round number: ", cnt+1)
             print("Try to deliver", amt, "satoshi:")
@@ -360,8 +367,8 @@ class SyncSimulatedPaymentSession():
             # compute some statistics about candidate paths
             payments = self._estimate_payment_statistics(paths)
 
-            # matke attempts and update our information about the UncertaintyNetwork
-            self._attempt_payments(payments)
+            # make attempts and update our information about the UncertaintyNetwork and track settled onions
+            self._attempt_payments(payments, settled_onions)
 
             # run some simple statistics and depict them
             amt, paid_fees, num_paths, number_failed_paths = self._evaluate_attempts(
@@ -373,6 +380,17 @@ class SyncSimulatedPaymentSession():
             total_number_failed_paths += number_failed_paths
             total_fees += paid_fees
             cnt += 1
+
+        # When residual amount is 0 / enough successful onions have been found, then settle payment. Else drop onions.
+        if amt == 0:
+            # print("{} onions to settle.".format(len(settled_onions)))
+            for onion in settled_onions:
+                try:
+                    self._oracle.settle_payment(onion["path"], onion["amount"])
+                except Exception as e:
+                    print(e)
+                    return -1
+
         end = time.time()
         entropy_end = self._uncertainty_network.entropy()
         print("SUMMARY:")

@@ -1,9 +1,9 @@
 .DS_Store
-__pycache__
 .idea
-pickhardtpayments/pickhardtpayments.egg-info
+__pycache__
+docs
 
-# not including large file with Channel Graph
+# too large to upload
 listchannels*.json
 
 # exclude log file

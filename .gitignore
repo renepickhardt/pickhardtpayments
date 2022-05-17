@@ -1,0 +1,7 @@
+.DS_Store
+.idea
+__pycache__
+docs
+
+# too large to upload
+listchannels*.json

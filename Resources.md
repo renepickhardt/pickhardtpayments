@@ -16,7 +16,7 @@
 * Most comprehensive source of original information is probably at: https://www.mit.edu/~dimitrib/home.html (The work body of Dimitri Bertsekas is truely impressive)
 
 ## LN implementations doing related stuff: 
-* https://github.com/C-Otto/lnd-manageJ/issues/6 (currently closest to being usable on mainnet)
+* https://github.com/C-Otto/lnd-manageJ/issues/6 (currently closest to being usable on mainnet, see [documentation](https://github.com/C-Otto/lnd-manageJ/blob/main/PickhardtPayments.md))
 * https://medium.com/blockstream/c-lightning-v0-10-2-bitcoin-dust-consensus-rule-33e777d58657 (c-lightning integration)
 * https://github.com/lightningdevkit/rust-lightning/pull/1227 (LDK has probabilistic payments with uncertainty )
 * https://github.com/ACINQ/eclair/pull/2071#pullrequestreview-941902333 (Eclair does similar stuff like our uncertainty network)

@@ -1,6 +1,6 @@
 import networkx as nx
 import json
-from .Channel import Channel
+from .Channel import Channel, ChannelFields
 
 
 class ChannelGraph():
@@ -60,38 +60,38 @@ def lnd2cln_json(channel_graph_json):
     Converts the channel graph json from the LND format to the c-lightning format
     """
 
+    # Maps LND keys to CLN keys
     LND_CLN_POLICY_MAP = {
-        "time_lock_delta": "delay",
-        "min_htlc": "htlc_minimum_msat",
-        "fee_base_msat": "base_fee_millisatoshi",
-        "fee_rate_milli_msat": "fee_per_millionth",
-        "disabled": "active",
-        "max_htlc_msat": "htlc_maximum_msat",
-        "last_update": "last_update",
+        "time_lock_delta": ChannelFields.CLTV,
+        "min_htlc": ChannelFields.HTLC_MINIMUM_MSAT,
+        "fee_base_msat": ChannelFields.BASE_FEE_MSAT,
+        "fee_rate_milli_msat": ChannelFields.FEE_RATE,
+        "disabled": ChannelFields.ACTIVE,
+        "max_htlc_msat": ChannelFields.HTLC_MAXIMUM_MSAT,
+        "last_update": ChannelFields.LAST_UPDATE,
     }
 
     def _add_direction(src, dest, lnd_channel, cln_channel):
-        cln_channel["source"] = lnd_channel[src + "_pub"]
-        cln_channel["destination"] = lnd_channel[dest + "_pub"]
+        cln_channel[ChannelFields.SRC] = lnd_channel[src + "_pub"]
+        cln_channel[ChannelFields.DEST] = lnd_channel[dest + "_pub"]
 
         src_policy = lnd_channel[src + "_policy"]
         for key in src_policy:
-            if key == "disabled":
-                cln_channel["active"] = src_policy[key]
-            cln_channel[LND_CLN_POLICY_MAP[key]] = int(src_policy[key])
+            val = int(src_policy[key]) if key != "disabled" else src_policy[key]
+            cln_channel[LND_CLN_POLICY_MAP[key]] = val
 
     cln_channel_json = []
     for lnd_channel in channel_graph_json:
         # Common fields for both direction
         cln_channel = {
-            "short_channel_id": lnd2cln_channel_id(int(lnd_channel["channel_id"])),
-            "satoshis": int(lnd_channel["capacity"]),
+            ChannelFields.SHORT_CHANNEL_ID: bolt_short_channel_id(int(lnd_channel["channel_id"])),
+            ChannelFields.CAP: int(lnd_channel["capacity"]),
+            ChannelFields.ANNOUNCED: True,
             "amount_msat": int(lnd_channel["capacity"]) * 1000,
-            "public": None, # Info not available in lnd describegraph?
 
             # TODO: map features and flags
-            "features": '',
-            "channel_flags": None,
+            ChannelFields.FEATURES: '',
+            ChannelFields.FLAGS: None,
             "message_flags": None
         }
 
@@ -106,12 +106,12 @@ def lnd2cln_json(channel_graph_json):
 
     return cln_channel_json
 
-def lnd2cln_channel_id(lnd_channel_id: int):
+def bolt_short_channel_id(lnd_channel_id: int):
     """
-    Convert from lnd short channel id to cln short channel id
+    Convert from LND short channel id to BOLT short channel id.
+    Ref: https://bitcoin.stackexchange.com/a/79427
     """
 
-    # https://bitcoin.stackexchange.com/a/79427
     block = lnd_channel_id >> 40
     tx = lnd_channel_id >> 16 & 0xFFFFFF
     output = lnd_channel_id & 0xFFFF

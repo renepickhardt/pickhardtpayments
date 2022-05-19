@@ -17,7 +17,6 @@ class ChannelFields():
     CAP = 'satoshis'
     ACTIVE = 'active'
     CLTV = 'delay'
-    FLAGS = 'channel_flags'
     SHORT_CHANNEL_ID = 'short_channel_id'
 
 

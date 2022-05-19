@@ -3,24 +3,22 @@ from .OracleLightningNetwork import OracleLightningNetwork
 
 from ortools.graph import pywrapgraph
 
-
 from typing import List
 import time
 import networkx as nx
-
 
 DEFAULT_BASE_THRESHOLD = 0
 
 
 class SyncSimulatedPaymentSession():
     """
-    A PaymentSesssion is used to create the min cost flow problem from the UncertaintyNetwork
+    A PaymentSession is used to create the min cost flow problem from the UncertaintyNetwork
 
     This happens by adding several parallel arcs coming from the piece wise linearization of the
     UncertaintyChannel to the min_cost_flow object. 
 
     The main API call ist `pickhardt_pay` which invokes a sequential loop to conduct trial and error
-    attmpts. The loop could easily send out all onions concurrently but this does not make sense 
+    attempts. The loop could easily send out all onions concurrently but this does not make sense
     against the simulated OracleLightningNetwork. 
     """
 
@@ -38,7 +36,7 @@ class SyncSimulatedPaymentSession():
         necessary for the OR-lib by google and the min cost flow solver
 
 
-        let's initialize the look up tables for node_ids to integers from [0,...,#number of nodes]
+        let's initialize the look-up tables for node_ids to integers from [0,...,#number of nodes]
         this is necessary because of the API of the Google Operations Research min cost flow solver
         """
         self._mcf_id = {}
@@ -47,14 +45,16 @@ class SyncSimulatedPaymentSession():
             self._mcf_id[node_id] = k
             self._node_key[k] = node_id
 
-    def _prepare_mcf_solver(self, src, dest, amt: int = 1, mu: int = 100_000_000, base_fee: int = DEFAULT_BASE_THRESHOLD):
+    def _prepare_mcf_solver(self, src, dest, amt: int = 1, mu: int = 100_000_000,
+                            base_fee: int = DEFAULT_BASE_THRESHOLD):
         """
         computes the uncertainty network given our prior belief and prepares the min cost flow solver
 
-        This function can define a value for \mu to control how heavily we combine the uncertainty cost and fees
-        Also the function supports only taking channels into account that don't charge a base_fee higher or equal to `base`
+        This function can define a value for mu to control how heavily we combine the uncertainty cost and fees Also
+        the function supports only taking channels into account that don't charge a base_fee higher or equal to `base`
 
-        returns the instantiated min_cost_flow object from the google OR-lib that contains the piecewise linearized problem
+        returns the instantiated min_cost_flow object from the Google OR-lib that contains the piecewise linearized
+        problem
         """
         self._min_cost_flow = pywrapgraph.SimpleMinCostFlow()
         self._arc_to_channel = {}
@@ -64,7 +64,7 @@ class SyncSimulatedPaymentSession():
             if channel.base_fee > base_fee:
                 continue
             # FIXME: Remove Magic Number for pruning
-            # Prune channels away thay have too low success probability! This is a huge runtime boost
+            # Prune channels away they have too low success probability! This is a huge runtime boost
             # However the pruning would be much better to work on quantiles of normalized cost
             # So as soon as we have better Scaling, Centralization and feature engineering we can
             # probably have a more focused pruning
@@ -96,25 +96,25 @@ class SyncSimulatedPaymentSession():
 
     def _next_hop(self, path):
         """
-        generator to iterate through edges indext by node id of paths
+        generator to iterate through edges indexed by node id of paths
 
         The path is a list of node ids. Each call returns a tuple src, dest of an edge in the path    
         """
         for i in range(1, len(path)):
-            src = path[i-1]
+            src = path[i - 1]
             dest = path[i]
             yield (src, dest)
 
     def _make_channel_path(self, G: nx.MultiDiGraph, path: List[str]):
         """
-        network x returns a path as a list of node_ids. However we need a list of `UncertaintyChannels`
+        network x returns a path as a list of node_ids. However, we need a list of `UncertaintyChannels`
         Since the graph has parallel edges it is quite some work to get the actual channels that the 
         min cost flow solver produced
         """
         channel_path = []
-        bottleneck = 2**63
+        bottleneck = 2 ** 63
         for src, dest in self._next_hop(path):
-            w = 2**63
+            w = 2 ** 63
             c = None
             flow = 0
             for sid in G[src][dest].keys():
@@ -139,9 +139,8 @@ class SyncSimulatedPaymentSession():
         progress but this is a mere conjecture at this point. I expect quite a bit of research will be
         necessary to resolve this issue.
         """
-        total_flow = {}
 
-        # first collect all linearized edges which are assigned a non zero flow put them into a networkx graph
+        # first collect all linearized edges which are assigned a non-zero flow put them into a networkx graph
         G = nx.MultiDiGraph()
         for i in range(self._min_cost_flow.NumArcs()):
             flow = self._min_cost_flow.Flow(i)  # *QUANTIZATION
@@ -182,21 +181,22 @@ class SyncSimulatedPaymentSession():
 
     def _generate_candidate_paths(self, src, dest, amt, mu: int = 100_000_000, base: int = DEFAULT_BASE_THRESHOLD):
         """
-        computes the optimal payment split to deliver `amt` from `src` to `dest` and updates our belief about the liquidity
+        computes the optimal payment split to deliver `amt` from `src` to `dest` and updates our belief about the
+        liquidity
 
         This is one step within the payment loop.
 
-        Retuns the residual amount of the `amt` that could ne be delivered and the paid fees
+        Returns the residual amount of the `amt` that could not be delivered and the paid fees
         (on a per channel base not including fees for downstream fees) for the delivered amount
 
-        the function also prints some results an statistics about the paths of the flow to stdout.
+        the function also prints some results on statistics about the paths of the flow to stdout.
         """
 
         # First we prepare the min cost flow by getting arcs from the uncertainty network
         self._prepare_mcf_solver(src, dest, amt, mu, base)
 
         start = time.time()
-        #print("solving mcf...")
+        # print("solving mcf...")
         status = self._min_cost_flow.Solve()
 
         if status != self._min_cost_flow.OPTIMAL:
@@ -206,7 +206,7 @@ class SyncSimulatedPaymentSession():
 
         paths = self._disect_flow_to_paths(src, dest)
         end = time.time()
-        return paths, end-start
+        return paths, end - start
 
     def _estimate_payment_statistics(self, paths):
         """
@@ -224,7 +224,7 @@ class SyncSimulatedPaymentSession():
             payments[i] = {
                 "routing_fee": fee, "probability": probability, "path": path, "amount": amount}
 
-            # to correctly compute conditional probabilities of non disjoint paths in the same set of paths
+            # to correctly compute conditional probabilities of non-disjoint paths in the same set of paths
             self._uncertainty_network.allocate_amount_on_path(path, amount)
 
         # remove allocated amounts for all planned onions before doing actual attempts
@@ -234,13 +234,15 @@ class SyncSimulatedPaymentSession():
 
         return payments
 
-    def _attempt_payments(self, payments):
+    def _attempt_payments(self, payments, settled_onions):
         """
         we attempt all planned payments and test the success against the oracle in particular this
         method changes - depending on the outcome of each payment - our belief about the uncertainty
-        in the UncertaintyNetwork
+        in the UncertaintyNetwork.
+        successful onions are collected to be transacted on the OracleNetwork if complete payment can be delivered
         """
         # test actual payment attempts
+
         for key, attempt in payments.items():
             success, erring_channel = self._oracle.send_onion(
                 attempt["path"], attempt["amount"])
@@ -249,10 +251,11 @@ class SyncSimulatedPaymentSession():
             if success:
                 self._uncertainty_network.allocate_amount_on_path(
                     attempt["path"], attempt["amount"])
+                settled_onions.append(payments[key])
 
-    def _evaluate_attempts(self, payments):
+    def _evaluate_attempts(self, payments, round_verbosity=False):
         """
-        helper function to collect statistics about attempts and print them
+        helper function to collect statistics about attempts and prints them if round_verbosity is True
 
         returns the `residual` amount that could not have been delivered and some statistics
         """
@@ -262,11 +265,14 @@ class SyncSimulatedPaymentSession():
         number_failed_paths = 0
         expected_sats_to_deliver = 0
         amt = 0
-        print("\nStatistics about {} candidate onions:\n".format(len(payments)))
-
         has_failed_attempt = False
-        print("successful attempts:")
-        print("--------------------")
+
+        # print summary
+        if round_verbosity:
+            print("\nStatistics about {} candidate onions:\n".format(len(payments)))
+            print("successful attempts:")
+            print("--------------------")
+
         for attempt in payments.values():
             success = attempt["success"]
             if success == False:
@@ -279,13 +285,20 @@ class SyncSimulatedPaymentSession():
             amt += amount
             total_fees += fee
             expected_sats_to_deliver += probability * amount
-            print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
-                probability*100, amount, len(path), int(fee*1000_000/amount)))
+
+            # print summary
+            if round_verbosity:
+                print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
+                    probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
+
             paid_fees += fee
 
         if has_failed_attempt:
-            print("\nfailed attempts:")
-            print("----------------")
+            # print summary
+            if round_verbosity:
+                print("\nfailed attempts:")
+                print("----------------")
+
             for attempt in payments.values():
                 success = attempt["success"]
                 if success:
@@ -297,24 +310,30 @@ class SyncSimulatedPaymentSession():
                 amt += amount
                 total_fees += fee
                 expected_sats_to_deliver += probability * amount
-                print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5} ".format(
-                    probability*100, amount, len(path), int(fee*1000_000/amount)))
+
+                # print summary
+                if round_verbosity:
+                    print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5} ".format(
+                        probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
+
                 number_failed_paths += 1
                 residual_amt += amount
 
-        print("\nAttempt Summary:")
-        print("=================")
-        print("\nTried to deliver {:10} sats".format(amt))
-        fraction = expected_sats_to_deliver*100./amt
-        print("expected to deliver {:10} sats \t({:4.2f}%)".format(
-            int(expected_sats_to_deliver), fraction))
-        fraction = (amt-residual_amt)*100./(amt)
-        print("actually deliverd {:10} sats \t({:4.2f}%)".format(
-            amt-residual_amt, fraction))
-        print("deviation: {:4.2f}".format(
-            (amt-residual_amt)/(expected_sats_to_deliver+1)))
-        print("planned_fee: {:8.3f} sat".format(total_fees))
-        print("paid fees: {:8.3f} sat".format(paid_fees))
+        # print summary
+        if round_verbosity:
+            print("\nAttempt Summary:")
+            print("=================")
+            print("\nTried to deliver {:10} sats".format(amt))
+            fraction = expected_sats_to_deliver * 100. / amt
+            print("expected to deliver {:10} sats \t({:4.2f}%)".format(
+                int(expected_sats_to_deliver), fraction))
+            fraction = (amt - residual_amt) * 100. / (amt)
+            print("actually delivered {:10} sats \t({:4.2f}%)".format(
+                amt - residual_amt, fraction))
+            print("deviation: {:4.2f}".format(
+                (amt - residual_amt) / (expected_sats_to_deliver + 1)))
+            print("planned_fee: {:8.3f} sat".format(total_fees))
+            print("paid fees: {:8.3f} sat".format(paid_fees))
         return residual_amt, paid_fees, len(payments), number_failed_paths
 
     def forget_information(self):
@@ -330,10 +349,13 @@ class SyncSimulatedPaymentSession():
         self._uncertainty_network.activate_network_wide_uncertainty_reduction(
             n, self._oracle)
 
-    def pickhardt_pay(self, src, dest, amt, mu=1, base=0):
+    def pickhardt_pay(self, src, dest, amt, mu=1, base=0, round_verbosity=False, summary=False):
         """
         conduct one experiment! might need to call oracle.reset_uncertainty_network() first
-        I could not put it here as some experiments require sharing of liqudity information
+        I could not put it here as some experiments require sharing of liquidity information
+
+        round_verbosity prints statistics for every round of payment attempts
+        summary prints final statistics for payment attempts
 
         """
         entropy_start = self._uncertainty_network.entropy()
@@ -345,45 +367,65 @@ class SyncSimulatedPaymentSession():
         total_number_failed_paths = 0
 
         # This is the main payment loop. It is currently blocking and synchronous but may be
-        # implemented in a concurrent way. Also we stop after 10 rounds which is pretty arbitrary
-        # a better stop criteria would be if we compute infeasable flows or if the probabilities
-        # are to low or residual amounts decrease to slowly
+        # implemented in a concurrent way. Also, we stop after 10 rounds which is pretty arbitrary
+        # a better stop criteria would be if we compute infeasible flows or if the probabilities
+        # are too low or residual amounts decrease to slowly
+        settled_onions = []
         while amt > 0 and cnt < 10:
-            print("Round number: ", cnt+1)
-            print("Try to deliver", amt, "satoshi:")
+            # print summary
+            if round_verbosity:
+                print("Round number: ", cnt + 1)
+                print("Try to deliver", amt, "satoshi:")
 
-            # transfer to a min cost flow problem and rund the solver
+            # transfer to a min cost flow problem and run the solver
             paths, runtime = self._generate_candidate_paths(
                 src, dest, amt, mu, base)
 
             # compute some statistics about candidate paths
             payments = self._estimate_payment_statistics(paths)
 
-            # matke attempts and update our information about the UncertaintyNetwork
-            self._attempt_payments(payments)
+            # make attempts and update our information about the UncertaintyNetwork and track settled onions
+            self._attempt_payments(payments, settled_onions)
 
             # run some simple statistics and depict them
             amt, paid_fees, num_paths, number_failed_paths = self._evaluate_attempts(
-                payments)
-            print("Runtime of flow computation: {:4.2f} sec ".format(runtime))
-            print("\n================================================================\n")
+                payments, round_verbosity)
+
+            # print summary
+            if round_verbosity:
+                print("Runtime of flow computation: {:4.2f} sec ".format(runtime))
+                print("\n================================================================\n")
 
             number_number_of_onions += num_paths
             total_number_failed_paths += number_failed_paths
             total_fees += paid_fees
             cnt += 1
+
+        # When residual amount is 0 / enough successful onions have been found, then settle payment. Else drop onions.
+        if amt == 0:
+            # print("{} onions to settle.".format(len(settled_onions)))
+            for onion in settled_onions:
+                try:
+                    self._oracle.settle_payment(onion["path"], onion["amount"])
+                except Exception as e:
+                    print(e)
+                    return -1
+
         end = time.time()
         entropy_end = self._uncertainty_network.entropy()
-        print("SUMMARY:")
-        print("========")
-        print("Rounds of mcf-computations: ", cnt)
-        print("Number of onions sent: ", number_number_of_onions)
-        print("Number of failed onions: ", total_number_failed_paths)
-        print("Failure rate: {:4.2f}% ".format(
-            total_number_failed_paths*100./number_number_of_onions))
-        print("total runtime (including inefficient memory managment): {:4.3f} sec".format(
-            end-start))
-        print("Learnt entropy: {:5.2f} bits".format(entropy_start-entropy_end))
-        print("Fees for successfull delivery: {:8.3f} sat --> {} ppm".format(
-            total_fees, int(total_fees*1000*1000/full_amt)))
-        print("used mu:", mu)
+
+        # print summary
+        if summary:
+            print("SUMMARY:")
+            print("========")
+            print("Rounds of mcf-computations: ", cnt)
+            print("Number of onions sent: ", number_number_of_onions)
+            print("Number of failed onions: ", total_number_failed_paths)
+            print("Failure rate: {:4.2f}% ".format(
+                total_number_failed_paths * 100. / number_number_of_onions))
+            print("total runtime (including inefficient memory management): {:4.3f} sec".format(
+                end - start))
+            print("Learnt entropy: {:5.2f} bits".format(entropy_start - entropy_end))
+            print("Fees for successful delivery: {:8.3f} sat --> {} ppm".format(
+                total_fees, int(total_fees * 1000 * 1000 / full_amt)))
+            print("used mu:", mu)

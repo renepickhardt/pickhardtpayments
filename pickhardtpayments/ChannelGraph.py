@@ -23,7 +23,7 @@ class ChannelGraph():
         if fmt == "cln":
             return channel_graph_json["channels"]
         elif fmt == "lnd":
-            return lnd2cln_json(channel_graph_json["edges"])
+            return lnd2cln_json(channel_graph_json)
         else:
             raise(ValueError("Invalid format. Must be one of ['cln', 'lnd']"))
 
@@ -80,8 +80,15 @@ def lnd2cln_json(channel_graph_json):
             val = int(src_policy[key]) if key != "disabled" else src_policy[key]
             cln_channel[LND_CLN_POLICY_MAP[key]] = val
 
+    def _find_node(pubkey, nodes_list):
+        for node in nodes_list:
+            if node["pub_key"] == pubkey:
+                return node
+
+    nodes_list = channel_graph_json["nodes"]
+    channels_list = channel_graph_json["edges"]
     cln_channel_json = []
-    for lnd_channel in channel_graph_json:
+    for lnd_channel in channels_list:
         # Common fields for both direction
         cln_channel = {
             ChannelFields.SHORT_CHANNEL_ID: bolt_short_channel_id(int(lnd_channel["channel_id"])),
@@ -89,20 +96,18 @@ def lnd2cln_json(channel_graph_json):
             ChannelFields.ANNOUNCED: True,
             "amount_msat": int(lnd_channel["capacity"]) * 1000,
 
-            # TODO: map features and flags
-            ChannelFields.FEATURES: '',
-            ChannelFields.FLAGS: None,
+            # Not supporting flags
+            "channel_flags": None,
             "message_flags": None
         }
 
         # Create channels in the direction(s) in which policies are defined
-        if lnd_channel["node1_policy"]:
-            _add_direction("node1", "node2", lnd_channel, cln_channel)
-            cln_channel_json.append(cln_channel)
-
-        if lnd_channel["node2_policy"]:
-            _add_direction("node2", "node1", lnd_channel, cln_channel)
-            cln_channel_json.append(cln_channel)
+        for (src, dest) in {"node1": "node2", "node2": "node1"}.items():
+            if lnd_channel[src + "_policy"]:
+                _add_direction(src, dest, lnd_channel, cln_channel)
+                lnd_node = _find_node(lnd_channel[src + "_pub"], nodes_list)
+                cln_channel[ChannelFields.FEATURES] = to_feature_hex(lnd_node["features"])
+                cln_channel_json.append(cln_channel)
 
     return cln_channel_json
 
@@ -116,3 +121,12 @@ def bolt_short_channel_id(lnd_channel_id: int):
     tx = lnd_channel_id >> 16 & 0xFFFFFF
     output = lnd_channel_id & 0xFFFF
     return "x".join(map(str, [block, tx, output]))
+
+def to_feature_hex(features: dict):
+    d = 0
+    for feature_bit in features.keys():
+        # Ignore non-bolt feature bits
+        if (b := int(feature_bit)) <= 49:
+            d |= (1 << b)
+
+    return f'0{d:x}'

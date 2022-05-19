@@ -62,8 +62,16 @@ class Channel():
         return self._cln_jsn[ChannelFields.DEST]
 
     @property
+    def last_update(self):
+        return self._cln_jsn[ChannelFields.LAST_UPDATE]
+
+    @property
     def ppm(self):
         return self._cln_jsn[ChannelFields.FEE_RATE]
+
+    @property
+    def features(self):
+        return self._cln_jsn[ChannelFields.FEATURES]
 
     @property
     def capacity(self):
@@ -76,10 +84,6 @@ class Channel():
     @property
     def cltv_delta(self):
         return self._cln_jsn[ChannelFields.CLTV]
-
-    @property
-    def flags(self):
-        return self._cln_jsn[ChannelFields.FLAGS]
 
     @property
     def short_channel_id(self):

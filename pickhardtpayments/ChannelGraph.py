@@ -80,12 +80,7 @@ def lnd2cln_json(channel_graph_json):
             val = int(src_policy[key]) if key != "disabled" else src_policy[key]
             cln_channel[LND_CLN_POLICY_MAP[key]] = val
 
-    def _find_node(pubkey, nodes_list):
-        for node in nodes_list:
-            if node["pub_key"] == pubkey:
-                return node
-
-    nodes_list = channel_graph_json["nodes"]
+    node_features = {node["pub_key"]: node["features"] for node in channel_graph_json["nodes"]}
     channels_list = channel_graph_json["edges"]
     cln_channel_json = []
     for lnd_channel in channels_list:
@@ -105,8 +100,8 @@ def lnd2cln_json(channel_graph_json):
         for (src, dest) in {"node1": "node2", "node2": "node1"}.items():
             if lnd_channel[src + "_policy"]:
                 _add_direction(src, dest, lnd_channel, cln_channel)
-                lnd_node = _find_node(lnd_channel[src + "_pub"], nodes_list)
-                cln_channel[ChannelFields.FEATURES] = to_feature_hex(lnd_node["features"])
+                features = node_features[lnd_channel[src + "_pub"]]
+                cln_channel[ChannelFields.FEATURES] = to_feature_hex(features)
                 cln_channel_json.append(cln_channel)
 
     return cln_channel_json

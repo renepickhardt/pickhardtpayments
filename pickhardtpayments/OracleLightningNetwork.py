@@ -79,7 +79,7 @@ class OracleLightningNetwork(ChannelGraph):
         mincut, _ = nx.minimum_cut(test_network, source, destination)
         return mincut
 
-    def settle_payment(self, path: OracleChannel, payment_amount: int):
+    def settle_payment(self, path: List[OracleChannel], payment_amount: int):
         """
         receives a dictionary with channels and payment amounts and adjusts the balances of the channels along the path.
 
@@ -97,3 +97,4 @@ class OracleLightningNetwork(ChannelGraph):
             else:
                 raise Exception("""Channel liquidity on Channel {} is lower than payment amount.
                     \nPayment cannot settle.""".format(channel.short_channel_id))
+        return 0

@@ -35,6 +35,10 @@ class OracleLightningNetwork(ChannelGraph):
         return self._network
 
     def send_onion(self, path, amt):
+        """
+
+        :rtype: object
+        """
         for channel in path:
             oracle_channel = self.get_channel(
                 channel.src, channel.dest, channel.short_channel_id)

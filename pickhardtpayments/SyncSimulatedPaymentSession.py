@@ -14,7 +14,6 @@ from .Payment import Payment
 from .UncertaintyNetwork import UncertaintyNetwork
 from .OracleLightningNetwork import OracleLightningNetwork
 
-
 from ortools.graph import pywrapgraph
 
 import time
@@ -45,8 +44,8 @@ class SyncSimulatedPaymentSession:
     This happens by adding several parallel arcs coming from the piece wise linearization of the
     UncertaintyChannel to the min_cost_flow object. 
 
-    The main API call ist `pickhardt_pay` which invokes a sequential loop to conduct trial and error
-    attmpts. The loop could easily send out all onions concurrently but this does not make sense 
+    The main API call is `pickhardt_pay` which invokes a sequential loop to conduct trial and error
+    attempts. The loop could easily send out all onions concurrently but this does not make sense
     against the simulated OracleLightningNetwork. 
     """
 
@@ -160,7 +159,7 @@ class SyncSimulatedPaymentSession:
         """
         A standard algorithm to dissect a flow into several paths.
 
-        FIXME: Note that this disection while accurate is probably not optimal in practise. 
+        FIXME: Note that this dissection while accurate is probably not optimal in practise.
         As noted in our Probabilistic payment delivery paper the payment process is a bernoulli trial 
         and I assume it makes sense to dissect the flow into paths of similar likelihood to make most
         progress but this is a mere conjecture at this point. I expect quite a bit of research will be
@@ -193,7 +192,7 @@ class SyncSimulatedPaymentSession:
             except:
                 break
             channel_path, used_flow = self._make_channel_path(G, path)
-            attempts.append(Attempt(channel_path, used_flow))
+            channel_paths.append((channel_path, used_flow))
 
             # reduce the flow from the selected path
             for pos, hop in enumerate(self._next_hop(path)):
@@ -217,6 +216,7 @@ class SyncSimulatedPaymentSession:
 
         the function also prints some results on statistics about the paths of the flow to stdout.
         """
+
         # First we prepare the min cost flow by getting arcs from the uncertainty network
         self._prepare_mcf_solver(src, dest, amt, mu, base)
         start = time.time()
@@ -298,14 +298,14 @@ class SyncSimulatedPaymentSession:
         fraction = expected_sats_to_deliver * 100. / amt
         print("expected to deliver {:10} sats \t({:4.2f}%)".format(
             int(expected_sats_to_deliver), fraction))
-        fraction = (amt - residual_amt) * 100. / amt
-        print("actually delivered \t{:10} sats \t({:4.2f}%)".format(
+        fraction = (amt - residual_amt) * 100. / (amt)
+        print("actually delivered {:10} sats \t({:4.2f}%)".format(
             amt - residual_amt, fraction))
         print("deviation: \t\t{:4.2f}".format(
             (amt - residual_amt) / (expected_sats_to_deliver + 1)))
-        print("planned_fee: \t{:8.3f} sat".format(total_fees))
-        print("paid fees: \t\t{:8.3f} sat".format(paid_fees))
-        return residual_amt, paid_fees, len(payment.attempts), len(failed_attempts)
+        print("planned_fee: {:8.3f} sat".format(total_fees))
+        print("paid fees: {:8.3f} sat".format(paid_fees))
+        return residual_amt, paid_fees, len(payments), number_failed_paths
 
     def forget_information(self):
         """

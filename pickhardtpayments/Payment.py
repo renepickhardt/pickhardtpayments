@@ -1,9 +1,3 @@
-import logging
-import time
-
-from .Attempt import Attempt, AttemptStatus
-
-
 class Payment:
     """
     Payment stores the information about an amount of sats to be delivered from source to destination.

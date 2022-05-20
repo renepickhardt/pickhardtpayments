@@ -1,3 +1,9 @@
+import logging
+import sys
+
+from Attempt import Attempt, SettlementStatus
+from Payment import Payment
+from pickhardtpayments import Channel
 from .UncertaintyNetwork import UncertaintyNetwork
 from .OracleLightningNetwork import OracleLightningNetwork
 
@@ -8,6 +14,21 @@ import time
 import networkx as nx
 
 DEFAULT_BASE_THRESHOLD = 0
+
+
+def set_logger():
+    # Set Logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')  # ,'%y-%m-%d %H:%M:%S'
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(logging.DEBUG)
+    stdout_handler.setFormatter(formatter)
+    file_handler = logging.FileHandler('pickhardt_pay.log')
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    logger.addHandler(stdout_handler)
 
 
 class SyncSimulatedPaymentSession():
@@ -168,7 +189,7 @@ class SyncSimulatedPaymentSession():
             except:
                 break
             channel_path, used_flow = self._make_channel_path(G, path)
-            channel_paths.append((channel_path, used_flow))
+            channel_paths.append(Attempt(channel_path, used_flow))
 
             # reduce the flow from the selected path
             for pos, hop in enumerate(self._next_hop(path)):
@@ -179,9 +200,10 @@ class SyncSimulatedPaymentSession():
                     G.remove_edge(src, dest, key=channel.short_channel_id)
         return channel_paths
 
-    def _generate_candidate_paths(self, src, dest, amt, mu: int = 100_000_000, base: int = DEFAULT_BASE_THRESHOLD):
+    def _generate_candidate_paths(self, src, dest, amt: int,  mu: int = 100_000_000, base: int = DEFAULT_BASE_THRESHOLD):
         """
-        computes the optimal payment split to deliver `amt` from `src` to `dest` and updates our belief about the liquidity
+        computes the optimal payment split to deliver `amt` from `src` to `dest` and updates our belief about the
+        liquidity
 
         This is one step within the payment loop.
 
@@ -190,10 +212,11 @@ class SyncSimulatedPaymentSession():
 
         the function also prints some results on statistics about the paths of the flow to stdout.
         """
+        # initialisation of List of Attempts for this round.
+        attempts_in_round = List[Attempt]
 
         # First we prepare the min cost flow by getting arcs from the uncertainty network
         self._prepare_mcf_solver(src, dest, amt, mu, base)
-
         start = time.time()
         # print("solving mcf...")
         status = self._min_cost_flow.Solve()
@@ -203,37 +226,32 @@ class SyncSimulatedPaymentSession():
             print(f'Status: {status}')
             exit(1)
 
-        paths = self._dissect_flow_to_paths(src, dest)
+        attempts_in_round = self._dissect_flow_to_paths(src, dest)
         end = time.time()
-        return paths, end - start
+        return attempts_in_round, end - start
 
-    def _estimate_payment_statistics(self, paths):
+    def _estimate_payment_statistics(self, attempts):
         """
         estimates the success probability of paths and computes fees (without paying downstream fees)
 
         @returns the statistics in the `payments` dictionary
         """
-        # FIXME: Decide if an `Payments` or `Attempt` class shall be used
-        payments = {}
         # compute fees and probabilities of candidate paths for evaluation
-        for i, onion in enumerate(paths):
-            path, amount = onion
-            fee, probability = self._uncertainty_network.get_features_of_candidate_path(
-                path, amount)
-            payments[i] = {
-                "routing_fee": fee, "probability": probability, "path": path, "amount": amount}
+        for attempt in attempts:
+            attempt.routing_fee, attempt.probability = self._uncertainty_network.get_features_of_candidate_path(
+                attempt.path, attempt.amount)
+            # logging.debug("fee: {attempt.routing_fee} msat, p = {attempt.probability:.4%}, amount: {attempt.amount}")
 
             # to correctly compute conditional probabilities of non-disjoint paths in the same set of paths
-            self._uncertainty_network.allocate_amount_on_path(path, amount)
+            self._uncertainty_network.allocate_amount_on_path(attempt.path, attempt.amount)
 
         # remove allocated amounts for all planned onions before doing actual attempts
-        for key, attempt in payments.items():
+        for attempt in attempts:
             self._uncertainty_network.allocate_amount_on_path(
-                attempt["path"], -attempt["amount"])
+                attempt.path, -attempt.amount)
 
-        return payments
 
-    def _attempt_payments(self, payments, settled_onions):
+    def _attempt_payments(self, attempts: List[Attempt]):
         """
         we attempt all planned payments and test the success against the oracle in particular this
         method changes - depending on the outcome of each payment - our belief about the uncertainty
@@ -241,18 +259,20 @@ class SyncSimulatedPaymentSession():
         successful onions are collected to be transacted on the OracleNetwork if complete payment can be delivered
         """
         # test actual payment attempts
-
-        for key, attempt in payments.items():
+        for attempt in attempts:
             success, erring_channel = self._oracle.send_onion(
-                attempt["path"], attempt["amount"])
-            payments[key]["success"] = success
-            payments[key]["erring_channel"] = erring_channel
+                attempt.path, attempt.amount)
             if success:
+                attempt.status = SettlementStatus.INFLIGHT
                 self._uncertainty_network.allocate_amount_on_path(
-                    attempt["path"], attempt["amount"])
-                settled_onions.append(payments[key])
+                    attempt.path, attempt.amount)
+                # unnecessary, because information is in attempt (Status INFLIGHT)
+                # settled_onions.append(payments[key])
+            else:
+                attempt.status = SettlementStatus.FAILED
+                #logging.debug('Failed Channel: {}'.format(erring_channel))
 
-    def _evaluate_attempts(self, payments):
+    def _evaluate_attempts(self, attempts: List[Attempt]):
         """
         helper function to collect statistics about attempts and print them
 
@@ -264,20 +284,22 @@ class SyncSimulatedPaymentSession():
         number_failed_paths = 0
         expected_sats_to_deliver = 0
         amt = 0
-        print("\nStatistics about {} candidate onions:\n".format(len(payments)))
+        inflight_attempts = []
+        failed_attempts = []
+        print("\nStatistics about {} candidate onions:\n".format(len(attempts)))
+        for attempt in attempts:
+            if attempt.status == SettlementStatus.INFLIGHT:
+                inflight_attempts.append(attempt)
+            if attempt.status == SettlementStatus.FAILED:
+                failed_attempts.append(attempt)
 
-        has_failed_attempt = False
         print("successful attempts:")
         print("--------------------")
-        for attempt in payments.values():
-            success = attempt["success"]
-            if success == False:
-                has_failed_attempt = True
-                continue
-            fee = attempt["routing_fee"] / 1000.
-            probability = attempt["probability"]
-            path = attempt["path"]
-            amount = attempt["amount"]
+        for inflight_attempt in inflight_attempts:
+            fee = inflight_attempt.routing_fee / 1000.
+            probability = inflight_attempt.probability
+            path = inflight_attempt.path
+            amount = inflight_attempt.amount
             amt += amount
             total_fees += fee
             expected_sats_to_deliver += probability * amount
@@ -285,39 +307,34 @@ class SyncSimulatedPaymentSession():
                 probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
             paid_fees += fee
 
-        if has_failed_attempt:
-            print("\nfailed attempts:")
-            print("----------------")
-            for attempt in payments.values():
-                success = attempt["success"]
-                if success:
-                    continue
-                fee = attempt["routing_fee"] / 1000.
-                probability = attempt["probability"]
-                path = attempt["path"]
-                amount = attempt["amount"]
-                amt += amount
-                total_fees += fee
-                expected_sats_to_deliver += probability * amount
-                print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5} ".format(
-                    probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
-                number_failed_paths += 1
-                residual_amt += amount
+        print("\nfailed attempts:")
+        print("----------------")
+        for failed_attempt in failed_attempts:
+            fee = failed_attempt.routing_fee / 1000.
+            probability = failed_attempt.probability
+            path = failed_attempt.path
+            amount = failed_attempt.amount
+            amt += amount
+            total_fees += fee
+            expected_sats_to_deliver += probability * amount
+            print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5} ".format(
+                probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
+            residual_amt += amount
 
         print("\nAttempt Summary:")
         print("=================")
-        print("\nTried to deliver {:10} sats".format(amt))
+        print("\nTried to deliver \t{:10} sats".format(amt))
         fraction = expected_sats_to_deliver * 100. / amt
         print("expected to deliver {:10} sats \t({:4.2f}%)".format(
             int(expected_sats_to_deliver), fraction))
         fraction = (amt - residual_amt) * 100. / (amt)
-        print("actually delivered {:10} sats \t({:4.2f}%)".format(
+        print("actually delivered \t{:10} sats \t({:4.2f}%)".format(
             amt - residual_amt, fraction))
-        print("deviation: {:4.2f}".format(
+        print("deviation: \t\t{:4.2f}".format(
             (amt - residual_amt) / (expected_sats_to_deliver + 1)))
-        print("planned_fee: {:8.3f} sat".format(total_fees))
-        print("paid fees: {:8.3f} sat".format(paid_fees))
-        return residual_amt, paid_fees, len(payments), number_failed_paths
+        print("planned_fee: \t{:8.3f} sat".format(total_fees))
+        print("paid fees: \t\t{:8.3f} sat".format(paid_fees))
+        return residual_amt, paid_fees, len(attempts), len(failed_attempts)
 
     def forget_information(self):
         """
@@ -338,50 +355,62 @@ class SyncSimulatedPaymentSession():
         I could not put it here as some experiments require sharing of liquidity information
 
         """
+
+        set_logger()
+
+        # Setup
         entropy_start = self._uncertainty_network.entropy()
         start = time.time()
         full_amt = amt
         cnt = 0
         total_fees = 0
-        number_number_of_onions = 0
+        number_of_onions = 0
         total_number_failed_paths = 0
 
+        # Initialise Payment
+        # currently with underscore to not mix up with existing variable 'payment'
+        _payment = Payment(src, dest, amt)
+
         # This is the main payment loop. It is currently blocking and synchronous but may be
-        # implemented in a concurrent way. Also we stop after 10 rounds which is pretty arbitrary
-        # a better stop criteria would be if we compute infeasable flows or if the probabilities
+        # implemented in a concurrent way. Also, we stop after 10 rounds which is pretty arbitrary
+        # a better stop criteria would be if we compute infeasible flows or if the probabilities
         # are too low or residual amounts decrease to slowly
-        settled_onions = []
         while amt > 0 and cnt < 10:
             print("Round number: ", cnt + 1)
             print("Try to deliver", amt, "satoshi:")
 
-            # transfer to a min cost flow problem and round the solver
-            paths, runtime = self._generate_candidate_paths(
-                src, dest, amt, mu, base)
+            # transfer to a min cost flow problem and run the solver
+            # paths is the lists of channels, runtime the time it took to calculate all candidates in this round
+            attempts_in_round, runtime = self._generate_candidate_paths(
+                _payment.sender, _payment.receiver, amt, mu, base)
 
             # compute some statistics about candidate paths
-            payments = self._estimate_payment_statistics(paths)
+            self._estimate_payment_statistics(attempts_in_round)
 
-            # make attempts and update our information about the UncertaintyNetwork and track settled onions
-            self._attempt_payments(payments, settled_onions)
+            # make attempts, try to send onion and register if success or not
+            # update our information about the UncertaintyNetwork
+            self._attempt_payments(attempts_in_round)
+
+            # add attempts to payment
+            for attempt in attempts_in_round:
+                _payment.attempts.append(attempt)
 
             # run some simple statistics and depict them
             amt, paid_fees, num_paths, number_failed_paths = self._evaluate_attempts(
-                payments)
+                attempts_in_round)
             print("Runtime of flow computation: {:4.2f} sec ".format(runtime))
             print("\n================================================================\n")
 
-            number_number_of_onions += num_paths
+            number_of_onions += num_paths
             total_number_failed_paths += number_failed_paths
             total_fees += paid_fees
             cnt += 1
 
         # When residual amount is 0 / enough successful onions have been found, then settle payment. Else drop onions.
         if amt == 0:
-            # print("{} onions to settle.".format(len(settled_onions)))
-            for onion in settled_onions:
+            for onion in _payment.inflight_attempts:
                 try:
-                    self._oracle.settle_payment(onion["path"], onion["amount"])
+                    self._oracle.settle_payment(onion.path, onion.amount)
                 except Exception as e:
                     print(e)
                     return -1
@@ -390,14 +419,14 @@ class SyncSimulatedPaymentSession():
         entropy_end = self._uncertainty_network.entropy()
         print("SUMMARY:")
         print("========")
-        print("Rounds of mcf-computations: ", cnt)
-        print("Number of onions sent: ", number_number_of_onions)
-        print("Number of failed onions: ", total_number_failed_paths)
+        print("Rounds of mcf-computations:\t", cnt)
+        print("Number of onions sent:\t\t", number_of_onions)
+        print("Number of failed onions:\t", total_number_failed_paths)
         print("Failure rate: {:4.2f}% ".format(
-            total_number_failed_paths * 100. / number_number_of_onions))
-        print("total runtime (including inefficient memory managment): {:4.3f} sec".format(
+            total_number_failed_paths * 100. / number_of_onions))
+        print("total runtime (including inefficient memory management): {:4.3f} sec".format(
             end - start))
         print("Learnt entropy: {:5.2f} bits".format(entropy_start - entropy_end))
-        print("Fees for successfull delivery: {:8.3f} sat --> {} ppm".format(
+        print("Fees for successful delivery: {:8.3f} sat --> {} ppm".format(
             total_fees, int(total_fees * 1000 * 1000 / full_amt)))
         print("used mu:", mu)

@@ -21,11 +21,11 @@ class UncertaintyChannel(Channel):
     Most importantly the class stores our belief about the liquidity information of a channel.
     This is done by reducing the uncertainty interval from [0,`capacity`] to 
     [`min_liquidity`, `max_liquidity`].
-    Additionally we need to know how many sats we currently have allocated via outstanding onions
+    Additionally, we need to know how many sats we currently have allocated via outstanding onions
     to the channel which is stored in `inflight`.
 
     The most important API call is the `get_piecewise_linearized_costs` function that computes the
-    pieceweise linearized cost for a channel rising from uncertainty as well as routing fees.
+    piecewise linearized cost for a channel rising from uncertainty as well as routing fees.
     """
 
     TOTAL_NUMBER_OF_SATS = 21_000_000 * 100_000_000

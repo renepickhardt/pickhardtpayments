@@ -1,3 +1,9 @@
+import logging
+import time
+from typing import List
+
+import Attempt
+
 class Payment:
     """
     Payment stores the information about an amount of sats to be delivered from source to destination.
@@ -27,6 +33,7 @@ class Payment:
         self._receiver = receiver
         self._total_amount = total_amount
         self._attempts = list()
+        self._start = time.time()
 
     def __str__(self):
         return "Payment with {} attempts to deliver {} sats from {} to {}".format(len(self._attempts),

@@ -216,6 +216,8 @@ class SyncSimulatedPaymentSession:
 
         the function also prints some results on statistics about the paths of the flow to stdout.
         """
+        # initialisation of List of Attempts for this round.
+        attempts_in_round = List[Attempt]
 
         # First we prepare the min cost flow by getting arcs from the uncertainty network
         self._prepare_mcf_solver(src, dest, amt, mu, base)
@@ -232,7 +234,28 @@ class SyncSimulatedPaymentSession:
         end = time.time()
         return attempts_in_round, end - start
 
-    def _attempt_payments(self, attempts: list[Attempt]):
+    def _estimate_payment_statistics(self, attempts):
+        """
+        estimates the success probability of paths and computes fees (without paying downstream fees)
+
+        @returns the statistics in the `payments` dictionary
+        """
+        # compute fees and probabilities of candidate paths for evaluation
+        for attempt in attempts:
+            attempt.routing_fee, attempt.probability = self._uncertainty_network.get_features_of_candidate_path(
+                attempt.path, attempt.amount)
+            # logging.debug("fee: {attempt.routing_fee} msat, p = {attempt.probability:.4%}, amount: {attempt.amount}")
+
+            # to correctly compute conditional probabilities of non-disjoint paths in the same set of paths
+            self._uncertainty_network.allocate_amount_on_path(attempt.path, attempt.amount)
+
+        # remove allocated amounts for all planned onions before doing actual attempts
+        for attempt in attempts:
+            self._uncertainty_network.allocate_amount_on_path(
+                attempt.path, -attempt.amount)
+
+
+    def _attempt_payments(self, attempts: List[Attempt]):
         """
         we attempt all planned payments and test the success against the oracle in particular this
         method changes - depending on the outcome of each payment - our belief about the uncertainty

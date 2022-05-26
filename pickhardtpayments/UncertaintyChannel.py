@@ -1,5 +1,5 @@
-from .Channel import Channel
-from .OracleLightningNetwork import OracleLightningNetwork
+from pickhardtpayments.Channel import Channel
+from pickhardtpayments.OracleLightningNetwork import OracleLightningNetwork
 from math import log2 as log
 
 

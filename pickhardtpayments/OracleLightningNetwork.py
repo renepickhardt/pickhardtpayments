@@ -1,7 +1,7 @@
 from typing import List
 
-from .ChannelGraph import ChannelGraph
-from .OracleChannel import OracleChannel
+from pickhardtpayments.ChannelGraph import ChannelGraph
+from pickhardtpayments.OracleChannel import OracleChannel
 import networkx as nx
 
 DEFAULT_BASE_THRESHOLD = 0

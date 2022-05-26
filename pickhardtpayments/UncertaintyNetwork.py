@@ -1,6 +1,7 @@
-from .ChannelGraph import ChannelGraph
-from .UncertaintyChannel import UncertaintyChannel
-from .OracleLightningNetwork import OracleLightningNetwork
+from pickhardtpayments.ChannelGraph import ChannelGraph
+from pickhardtpayments.OracleLightningNetwork import OracleLightningNetwork
+from pickhardtpayments.UncertaintyChannel import UncertaintyChannel
+
 
 from typing import List
 import networkx as nx
@@ -43,6 +44,7 @@ class UncertaintyNetwork(ChannelGraph):
     def get_features_of_candidate_path(self, path: List[UncertaintyChannel], amt: int) -> (float, float):
         """
         returns the routing fees and probability of a candidate path
+        :rtype: object
         """
         probability = 1
         routing_fees = 0

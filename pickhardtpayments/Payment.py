@@ -41,7 +41,7 @@ class Payment:
                                                                                   self._receiver[-8:])
 
     @property
-    def sender(self):
+    def sender(self) -> str:
         """Returns the address of the sender of the payment.
 
         :return: sender address for the payment
@@ -50,7 +50,7 @@ class Payment:
         return self._sender
 
     @property
-    def receiver(self):
+    def receiver(self) -> str:
         """Returns the address of the receiver of the payment.
 
         :return: receiver address for the payment
@@ -59,7 +59,7 @@ class Payment:
         return self._receiver
 
     @property
-    def total_amount(self):
+    def total_amount(self) -> int:
         """Returns the amount to be sent with this payment.
 
         :return: The total amount of sats to be delivered from source address to destination address.
@@ -68,7 +68,7 @@ class Payment:
         return self._total_amount
 
     @property
-    def start_time(self):
+    def start_time(self) -> float:
         """Returns the time when Payment object was instantiated.
 
         :return: time in seconds from epoch to instantiation of Payment object.
@@ -77,7 +77,7 @@ class Payment:
         return self._start_time
 
     @property
-    def end_time(self):
+    def end_time(self) -> float:
         """Time when payment was finished, either by being aborted or by successful settlement
 
         Returns the time when all Attempts in Payment did settle or fail.
@@ -100,7 +100,7 @@ class Payment:
         self._end_time = timestamp
 
     @property
-    def attempts(self):
+    def attempts(self) -> list[Attempt]:
         """Returns all onions that were built and are associated with this Payment.
 
         :return: A list of Attempts of this payment.
@@ -117,7 +117,7 @@ class Payment:
         self._attempts.extend(attempts)
 
     @property
-    def settlement_fees(self):
+    def settlement_fees(self) -> float:
         """Returns the fees that accrued for this payment. It's the sum of the routing fees of all settled onions.
 
         :return: fee in sats for successful attempts of Payment
@@ -129,7 +129,7 @@ class Payment:
         return settlement_fees
 
     @property
-    def planned_fees(self):
+    def planned_fees(self) -> float:
         """Returns the fees for all Attempts for this payment, that are still outstanding/planned.
 
         It's the sum of the routing fees of all planned attempts.
@@ -143,7 +143,7 @@ class Payment:
         return planned_fees
 
     @property
-    def ppm(self):
+    def ppm(self) -> float:
         """Returns the fees that accrued for this payment. It's the sum of the routing fees of all settled onions.
 
         :return: fee in ppm for successful delivery and settlement of payment
@@ -151,10 +151,10 @@ class Payment:
         """
         return self.fee * 1000 / self.total_amount
 
-    def filter_attempts(self, flag: Attempt.AttemptStatus):
+    def filter_attempts(self, flag: Attempt.AttemptStatus) -> list[Attempt]:
         """Returns all onions with the given state.
 
-        :param flag: the state of the attempts that sould be filtered for
+        :param flag: the state of the attempts that should be filtered for
         :type: Attempt.AttemptStatus
 
         :return: A list of successful Attempts of this Payment, which could be settled.
@@ -171,7 +171,7 @@ class Payment:
         return []
 
     @property
-    def successful(self):
+    def successful(self) -> bool:
         """Returns True if the total_amount of the payment could be delivered successfully.
 
         :return: True if Payment settled successfully, else False.

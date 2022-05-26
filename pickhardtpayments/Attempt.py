@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pickhardtpayments import Channel
+import UncertaintyChannel
 
 
 class AttemptStatus(Enum):
@@ -26,17 +26,12 @@ class Attempt:
     :type amount: int
     """
 
-    def __init__(self, path: list[Channel], amount: int = 0):
+    def __init__(self, path: list[UncertaintyChannel], amount: int = 0):
         """Constructor method
         """
         self._routing_fee = -1
         self._probability = -1
-        if not isinstance(path, list):
-            raise ValueError("path needs to be a collection of Channels")
-        for channel in path:
-            if not isinstance(channel, Channel):
-                raise ValueError("path needs to be a collection of Channels")
-            self._path = path
+        self._path = path
         self._status = AttemptStatus.PLANNED
         self._amount = amount
 
@@ -49,7 +44,7 @@ class Attempt:
         return description
 
     @property
-    def path(self):
+    def path(self) -> list[UncertaintyChannel]:
         """Returns the path of the attempt.
 
         :return: the list of UncertaintyChannels that the path consists of
@@ -58,7 +53,7 @@ class Attempt:
         return self._path
 
     @property
-    def amount(self):
+    def amount(self) -> int:
         """Returns the amount of the attempt.
 
         :return: the amount that was tried to send in this Attempt
@@ -67,7 +62,7 @@ class Attempt:
         return self._amount
 
     @property
-    def status(self):
+    def status(self) -> AttemptStatus:
         """Returns the status of the attempt.
 
         :return: returns the state of the attempt
@@ -87,7 +82,7 @@ class Attempt:
         self._status = value
 
     @property
-    def routing_fee(self):
+    def routing_fee(self) -> int:
         """Returns the accrued routing fee in msat requested for this path.
 
         :return: accrued routing fees for this attempt in msat
@@ -105,7 +100,7 @@ class Attempt:
         self._routing_fee = value
 
     @property
-    def probability(self):
+    def probability(self) -> float:
         """Returns estimated success probability before the attempt
 
         :return: estimated success probability before the attempt

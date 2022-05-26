@@ -1,14 +1,13 @@
 import logging
 import sys
 
-from Attempt import Attempt, AttemptStatus
-from Payment import Payment
-from .UncertaintyNetwork import UncertaintyNetwork
-from .OracleLightningNetwork import OracleLightningNetwork
+from pickhardtpayments.Attempt import Attempt, AttemptStatus
+from pickhardtpayments.Payment import Payment
+from pickhardtpayments.UncertaintyNetwork import UncertaintyNetwork
+from pickhardtpayments.OracleLightningNetwork import OracleLightningNetwork
 
 from ortools.graph import pywrapgraph
 
-from typing import List
 import time
 import networkx as nx
 
@@ -124,7 +123,7 @@ class SyncSimulatedPaymentSession:
             dest = path[i]
             yield src, dest
 
-    def _make_channel_path(self, G: nx.MultiDiGraph, path: List[str]):
+    def _make_channel_path(self, G: nx.MultiDiGraph, path: list[str]):
         """
         network x returns a path as a list of node_ids. However, we need a list of `UncertaintyChannels`
         Since the graph has parallel edges it is quite some work to get the actual channels that the
@@ -224,7 +223,7 @@ class SyncSimulatedPaymentSession:
         end = time.time()
         return attempts_in_round, end - start
 
-    def _estimate_payment_statistics(self, attempts: List[Attempt]):
+    def _estimate_payment_statistics(self, attempts: list[Attempt]):
         """
         estimates the success probability of paths and computes fees (without paying downstream fees)
 
@@ -244,7 +243,7 @@ class SyncSimulatedPaymentSession:
             self._uncertainty_network.allocate_amount_on_path(
                 attempt.path, -attempt.amount)
 
-    def _attempt_payments(self, attempts: List[Attempt]):
+    def _attempt_payments(self, attempts: list[Attempt]):
         """
         we attempt all planned payments and test the success against the oracle in particular this
         method changes - depending on the outcome of each payment - our belief about the uncertainty
@@ -264,7 +263,7 @@ class SyncSimulatedPaymentSession:
             else:
                 attempt.status = AttemptStatus.FAILED
 
-    def _evaluate_attempts(self, attempts: List[Attempt]):
+    def _evaluate_attempts(self, attempts: list[Attempt]):
         """
         helper function to collect statistics about attempts and print them
 

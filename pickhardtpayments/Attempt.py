@@ -3,7 +3,7 @@ from enum import Enum
 from pickhardtpayments import Channel
 
 
-class SettlementStatus(Enum):
+class AttemptStatus(Enum):
     PLANNED = 1
     INFLIGHT = 2
     ARRIVED = 3
@@ -29,7 +29,6 @@ class Attempt:
     def __init__(self, path: list[Channel], amount: int = 0):
         """Constructor method
         """
-        self._paths = None
         self._routing_fee = -1
         self._probability = -1
         if not isinstance(path, list):
@@ -38,12 +37,16 @@ class Attempt:
             if not isinstance(channel, Channel):
                 raise ValueError("path needs to be a collection of Channels")
             self._path = path
-        self._status = SettlementStatus.PLANNED
+        self._status = AttemptStatus.PLANNED
         self._amount = amount
 
     def __str__(self):
-        return "Path with {} channels to deliver {} sats and status {}.".format(len(self._path),
-                                                                                self._amount, self._status.name)
+        description = "Path with {} channels to deliver {} sats and status {}.".format(len(self._path),
+                                                                                       self._amount, self._status.name)
+        if self._routing_fee > 0:
+            description += "\nsuccess probability of {:6.2f}% , fee of {:8.3f} sat and a ppm of {:5} ".format(
+                self._probability * 100, self._routing_fee/1000, int(self._routing_fee * 1000 / self._amount))
+        return description
 
     @property
     def path(self):
@@ -53,20 +56,6 @@ class Attempt:
         :rtype: list[UncertaintyChannel]
         """
         return self._path
-
-    @path.setter
-    def path(self, attempts: list):
-        """Sets the path that was set up for a certain amount
-
-        :param attempts: a List of Channels from UncertaintyGraph that an amount was attempted to be routed through
-        :type attempts: list[UncertaintyChannel]
-        """
-        if not isinstance(attempts, list):
-            raise ValueError("path needs to be a collection of Channels")
-        for attempt in attempts:
-            if not isinstance(attempt, Channel):
-                raise ValueError("path needs to be a collection of Channels")
-        self._paths = attempts
 
     @property
     def amount(self):
@@ -82,18 +71,18 @@ class Attempt:
         """Returns the status of the attempt.
 
         :return: returns the state of the attempt
-        :rtype: SettlementStatus
+        :rtype: AttemptStatus
         """
         return self._status
 
     @status.setter
-    def status(self, value: SettlementStatus):
+    def status(self, value: AttemptStatus):
         """Sets the status of the attempt.
 
         A flag to describe if the path failed, succeeded or was used for settlement (see enum SettlementStatus)
 
         :param value: Current state of the Attempt
-        :type value: SettlementStatus
+        :type value: AttemptStatus
         """
         self._status = value
 
@@ -126,9 +115,11 @@ class Attempt:
 
     @probability.setter
     def probability(self, value: int):
-        """Sets the estimated success probability before the attempt
+        """Sets the estimated success probability of the attempt.
 
-        :param value: estimated success probability before the attempt
+        This is calculated as product of the channels' success probabilities as determined in the UncertaintyGraph.
+
+        :param value: estimated success probability of the attempt
         :type value: float
         """
         self._probability = value

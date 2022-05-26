@@ -25,14 +25,14 @@ class Payment:
         """Constructor method
         """
         self._successful = False
-        self._ppm = -1
-        self._fee = -1
-        self._end_time = -1
+        self._ppm = None
+        self._fee = None
+        self._start_time = time.time()
+        self._end_time = None
         self._sender = sender
         self._receiver = receiver
         self._total_amount = total_amount
         self._attempts = list()
-        self._start_time = time.time()
 
     def __str__(self):
         return "Payment with {} attempts to deliver {} sats from {} to {}".format(len(self._attempts),
@@ -117,16 +117,30 @@ class Payment:
         self._attempts.extend(attempts)
 
     @property
-    def fee(self):
+    def settlement_fees(self):
         """Returns the fees that accrued for this payment. It's the sum of the routing fees of all settled onions.
 
         :return: fee in sats for successful attempts of Payment
         :rtype: float
         """
-        fee = 0
-        for attempt in self.settled_attempts:
-            fee += attempt.routing_fee
-        return fee
+        settlement_fees = 0
+        for attempt in self.filter_attempts(Attempt.AttemptStatus.SETTLED):
+            settlement_fees += attempt.routing_fee
+        return settlement_fees
+
+    @property
+    def planned_fees(self):
+        """Returns the fees for all Attempts for this payment, that are still outstanding/planned.
+
+        It's the sum of the routing fees of all planned attempts.
+
+        :return: fee in sats for planned attempts of Payment
+        :rtype: float
+        """
+        planned_fees = 0
+        for attempt in self.filter_attempts(Attempt.AttemptStatus.PLANNED):
+            planned_fees += attempt.routing_fee
+        return planned_fees
 
     @property
     def ppm(self):
@@ -137,56 +151,24 @@ class Payment:
         """
         return self.fee * 1000 / self.total_amount
 
-    @property
-    def inflight_attempts(self):
-        """Returns all onions that can successfully be routed.
+    def filter_attempts(self, flag: Attempt.AttemptStatus):
+        """Returns all onions with the given state.
+
+        :param flag: the state of the attempts that sould be filtered for
+        :type: Attempt.AttemptStatus
 
         :return: A list of successful Attempts of this Payment, which could be settled.
         :rtype: list[Attempt]
         """
-        inflight_attempts = []
+        filtered_attempts = []
         try:
             for attempt in self._attempts:
-                if attempt.status == Attempt.SettlementStatus.INFLIGHT:
-                    inflight_attempts.append(attempt)
-            return inflight_attempts
+                if attempt.status == flag:
+                    filtered_attempts.append(attempt)
+            return filtered_attempts
         except ValueError:
-            logging.warning("ValueError in Payment.inflight_attempts")
+            logging.warning("ValueError in Payment.filtered_attempts")
         return []
-
-    @property
-    def failed_attempts(self):
-        """Returns all onions that failed, where no delivery of the (partial) amount was possible.
-
-        :return: A list of failed Attempts of this Payment, Attempts that could be not settled.
-        :rtype: list[Attempt]
-        """
-        failed_attempts = []
-        try:
-            for attempt in self._attempts:
-                if attempt.status == Attempt.SettlementStatus.FAILED:
-                    failed_attempts.append(attempt)
-            return failed_attempts
-        except ValueError:
-            logging.warning("ValueError in Payment.failed_attempts")
-            return []
-
-    @property
-    def settled_attempts(self):
-        """Returns all onions that were successfully routed and then settled.
-
-        :return: A list of Attempts of this Payment, which were successfully settled.
-        :rtype: list[Attempt]
-        """
-        settled_attempts = []
-        try:
-            for attempt in self._attempts:
-                if attempt.status == Attempt.SettlementStatus.SETTLED:
-                    settled_attempts.append(attempt)
-            return settled_attempts
-        except ValueError:
-            logging.warning("ValueError in Payment.settled_attempts")
-            return []
 
     @property
     def successful(self):

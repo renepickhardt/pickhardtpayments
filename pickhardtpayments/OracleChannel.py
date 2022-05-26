@@ -31,7 +31,15 @@ class OracleChannel(Channel):
 
     @actual_liquidity.setter
     def actual_liquidity(self, amt: int):
-        self._actual_liquidity = amt
+        """Sets the liquidity of a channel in the Oracle Network
+
+        :param amt: amount to be assigned to channel liquidity
+        :type amt: int
+        """
+        if 0 <= amt <= self.capacity:
+            self._actual_liquidity = amt
+        else:
+            raise ValueError("Oops! The amount to be assigned to channel liquidity is negative or higher than capacity")
 
     def can_forward(self, amt: int):
         """

@@ -42,6 +42,7 @@ class OracleChannel(Channel):
             raise ValueError("Oops! The amount to be assigned to channel liquidity is negative or higher than capacity")
 
 
+
     def can_forward(self, amt: int):
         """
         check if the oracle channel can forward a certain amount

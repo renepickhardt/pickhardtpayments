@@ -414,9 +414,3 @@ class SyncSimulatedPaymentSession:
         print("fee for settlement of delivery: {:8.3f} sat --> {} ppm".format(
             payment.settlement_fees/1000, int(payment.settlement_fees * 1000 / payment.total_amount)))
         print("used mu:", mu)
-
-
-# TODO cleanup
-# TODO calculate total fee per payment in payment class
-# TODO calculate total ppm per payment in payment class
-# TODO monitor successful flag in payment

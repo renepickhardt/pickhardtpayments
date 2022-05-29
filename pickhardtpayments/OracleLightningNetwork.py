@@ -1,5 +1,6 @@
 from typing import List
 
+from pickhardtpayments.Channel import Channel
 from pickhardtpayments.ChannelGraph import ChannelGraph
 from pickhardtpayments.OracleChannel import OracleChannel
 import networkx as nx
@@ -78,7 +79,7 @@ class OracleLightningNetwork(ChannelGraph):
         mincut, _ = nx.minimum_cut(test_network, source, destination)
         return mincut
 
-    def settle_payment(self, path: List[OracleChannel], payment_amount: int):
+    def settle_payment(self, path: List[Channel], payment_amount: int):
         """
         receives a dictionary with channels and payment amounts and adjusts the balances of the channels along the path.
 

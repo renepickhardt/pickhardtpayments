@@ -1,9 +1,9 @@
 import networkx as nx
 import json
-from .Channel import Channel
+from Channel import Channel
 
 
-class ChannelGraph():
+class ChannelGraph:
     """
     Represents the public information about the Lightning Network that we see from Gossip and the 
     Bitcoin Blockchain. 

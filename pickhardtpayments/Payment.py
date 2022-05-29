@@ -1,7 +1,7 @@
 import logging
 import time
 
-import Attempt
+from Attempt import Attempt, AttemptStatus
 
 
 class Payment:
@@ -124,7 +124,7 @@ class Payment:
         :rtype: float
         """
         settlement_fees = 0
-        for attempt in self.filter_attempts(Attempt.AttemptStatus.SETTLED):
+        for attempt in self.filter_attempts(AttemptStatus.SETTLED):
             settlement_fees += attempt.routing_fee
         return settlement_fees
 
@@ -138,7 +138,7 @@ class Payment:
         :rtype: float
         """
         planned_fees = 0
-        for attempt in self.filter_attempts(Attempt.AttemptStatus.PLANNED):
+        for attempt in self.filter_attempts(AttemptStatus.PLANNED):
             planned_fees += attempt.routing_fee
         return planned_fees
 
@@ -151,7 +151,7 @@ class Payment:
         """
         return self.fee * 1000 / self.total_amount
 
-    def filter_attempts(self, flag: Attempt.AttemptStatus) -> list[Attempt]:
+    def filter_attempts(self, flag: AttemptStatus) -> list[Attempt]:
         """Returns all onions with the given state.
 
         :param flag: the state of the attempts that should be filtered for

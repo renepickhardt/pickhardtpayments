@@ -1,10 +1,18 @@
+"""
+SyncSimulatedPaymentSession.py
+====================================
+The core module of the pickhardt payment project.
+An example payment is executed and statistics are run.
+"""
+
 import logging
 import sys
 
 from pickhardtpayments.Attempt import Attempt, AttemptStatus
 from pickhardtpayments.Payment import Payment
-from pickhardtpayments.UncertaintyNetwork import UncertaintyNetwork
-from pickhardtpayments.OracleLightningNetwork import OracleLightningNetwork
+from UncertaintyNetwork import UncertaintyNetwork
+from OracleLightningNetwork import OracleLightningNetwork
+
 
 from ortools.graph import pywrapgraph
 
@@ -29,7 +37,6 @@ def set_logger():
     logger.addHandler(stdout_handler)
 
 
-# noinspection PyPep8Naming
 class SyncSimulatedPaymentSession:
     """
     A PaymentSession is used to create the min cost flow problem from the UncertaintyNetwork
@@ -370,8 +377,7 @@ class SyncSimulatedPaymentSession:
             sub_payment = Payment(payment.sender, payment.receiver, amt)
             # transfer to a min cost flow problem and run the solver
             # paths is the lists of channels, runtime the time it took to calculate all candidates in this round
-            paths, runtime = self._generate_candidate_paths(
-                payment.sender, payment.receiver, amt, mu, base)
+            paths, runtime = self._generate_candidate_paths(payment.sender, payment.receiver, amt, mu, base)
             sub_payment.add_attempts(paths)
 
             # compute some statistics about candidate paths

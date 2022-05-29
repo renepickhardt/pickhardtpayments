@@ -2,14 +2,19 @@
 ===========================
 SyncSimulatedPaymentSession
 ===========================
+
+The core module of the pickhardt payment project.
+An example payment is executed and statistics are run.
 """
+
 import logging
 import sys
 
 from pickhardtpayments.Attempt import Attempt, AttemptStatus
 from pickhardtpayments.Payment import Payment
-from pickhardtpayments.UncertaintyNetwork import UncertaintyNetwork
-from pickhardtpayments.OracleLightningNetwork import OracleLightningNetwork
+from UncertaintyNetwork import UncertaintyNetwork
+from OracleLightningNetwork import OracleLightningNetwork
+
 
 from ortools.graph import pywrapgraph
 

@@ -1,6 +1,6 @@
 from enum import Enum
 
-import UncertaintyChannel
+from pickhardtpayments import Channel
 
 
 class AttemptStatus(Enum):
@@ -20,17 +20,17 @@ class Attempt:
     Attempt.
     An Attempt consists of a list of Channels (class:Channel) and the amount in sats to be sent through this path.
 
-    :param path: a list of UncertaintyChannel objects from sender to receiver
-    :type path: list[UncertaintyChannel]
+    :param path: a list of Channel objects from sender to receiver
+    :type path: list[Channel]
     :param amount: the amount to be transferred from source to destination
     :type amount: int
     """
 
-    def __init__(self, path: list[UncertaintyChannel], amount: int = 0):
+    def __init__(self, path: list[Channel], amount: int = 0):
         """Constructor method
         """
-        self._routing_fee = -1
-        self._probability = -1
+        self._routing_fee = None
+        self._probability = None
         self._path = path
         self._status = AttemptStatus.PLANNED
         self._amount = amount
@@ -44,11 +44,11 @@ class Attempt:
         return description
 
     @property
-    def path(self) -> list[UncertaintyChannel]:
+    def path(self) -> list[Channel]:
         """Returns the path of the attempt.
 
-        :return: the list of UncertaintyChannels that the path consists of
-        :rtype: list[UncertaintyChannel]
+        :return: the list of Channels that the path consists of
+        :rtype: list[Channel]
         """
         return self._path
 

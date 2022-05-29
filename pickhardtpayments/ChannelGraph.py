@@ -1,21 +1,21 @@
 import networkx as nx
 import json
-from .Channel import Channel
+from Channel import Channel
 
 
-class ChannelGraph():
+class ChannelGraph:
     """
     Represents the public information about the Lightning Network that we see from Gossip and the 
     Bitcoin Blockchain. 
 
-    The channels of the Channel Graph are directed and identiried uniquly by a triple consisting of
+    The channels of the Channel Graph are directed and identified uniquely by a triple consisting of
     (source_node_id, destination_node_id, short_channel_id). This allows the ChannelGraph to also 
     contain parallel channels.
     """
 
     def _get_channel_json(self, filename: str):
         """
-        extracts the dictionary from the file that contains lightnig-cli listchannels json string
+        extracts the dictionary from the file that contains lightning-cli listchannels json string
         """
         f = open(filename)
         return json.load(f)["channels"]

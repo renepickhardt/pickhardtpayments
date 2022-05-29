@@ -1,7 +1,7 @@
-from pickhardtpayments.ChannelGraph import ChannelGraph
-from pickhardtpayments.UncertaintyNetwork import UncertaintyNetwork
-from pickhardtpayments.OracleLightningNetwork import OracleLightningNetwork
-from pickhardtpayments.SyncSimulatedPaymentSession import SyncSimulatedPaymentSession
+from ChannelGraph import ChannelGraph
+from UncertaintyNetwork import UncertaintyNetwork
+from OracleLightningNetwork import OracleLightningNetwork
+from SyncSimulatedPaymentSession import SyncSimulatedPaymentSession
 
 
 #we first need to import the channel graph from core lightning jsondump

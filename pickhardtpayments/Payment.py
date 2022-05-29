@@ -4,6 +4,7 @@ from typing import List
 
 import Attempt
 
+
 class Payment:
     """
     Payment stores the information about an amount of sats to be delivered from source to destination.

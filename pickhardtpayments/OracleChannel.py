@@ -29,6 +29,11 @@ class OracleChannel(Channel):
         """
         return self._actual_liquidity
 
+    @actual_liquidity.setter
+    def actual_liquidity(self,amt):
+        self._actual_liquidity = amt
+
+    
     def can_forward(self, amt: int):
         """
         check if the oracle channel can forward a certain amount

@@ -62,7 +62,6 @@ class SyncSimulatedPaymentSession:
         """
         necessary for the OR-lib by google and the min cost flow solver
 
-
         let's initialize the look-up tables for node_ids to integers from [0,...,#number of nodes]
         this is necessary because of the API of the Google Operations Research min cost flow solver
         """
@@ -227,7 +226,7 @@ class SyncSimulatedPaymentSession:
             print(f'Status: {status}')
             exit(1)
 
-        paths = self._dissect_flow_to_paths(src, dest)
+        attempts_in_round = self._dissect_flow_to_paths(src, dest)
         end = time.time()
         return attempts_in_round, end - start
 
@@ -393,7 +392,6 @@ class SyncSimulatedPaymentSession:
 
             print("Runtime of flow computation: {:4.2f} sec ".format(runtime))
             print("\n================================================================\n")
-
             total_number_failed_paths += number_failed_paths
             total_fees += paid_fees
             cnt += 1

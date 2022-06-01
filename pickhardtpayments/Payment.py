@@ -129,16 +129,16 @@ class Payment:
         return settlement_fees
 
     @property
-    def planned_fees(self) -> float:
-        """Returns the fees for all Attempts for this payment, that are still outstanding/planned.
+    def arrived_fees(self) -> float:
+        """Returns the fees for all Attempts/onions for this payment, that arrived but have not yet been settled.
 
-        It's the sum of the routing fees of all planned attempts.
+        It's the sum of the routing fees of all arrived attempts.
 
-        :return: fee in sats for planned attempts of Payment
+        :return: fee in sats for arrived attempts of Payment
         :rtype: float
         """
         planned_fees = 0
-        for attempt in self.filter_attempts(AttemptStatus.PLANNED):
+        for attempt in self.filter_attempts(AttemptStatus.ARRIVED):
             planned_fees += attempt.routing_fee
         return planned_fees
 
@@ -163,7 +163,7 @@ class Payment:
         filtered_attempts = []
         try:
             for attempt in self._attempts:
-                if attempt.status == flag:
+                if attempt.status.value == flag.value:
                     filtered_attempts.append(attempt)
             return filtered_attempts
         except ValueError:

@@ -34,6 +34,11 @@ def set_logger():
     logger.addHandler(stdout_handler)
 
 
+class MCFSolverError(Exception):
+    """Throws errors when the Min Cost Flow Solver does not return an appropriate result"""
+    pass
+
+
 class SyncSimulatedPaymentSession:
     """
     A PaymentSession is used to create the min cost flow problem from the UncertaintyNetwork
@@ -73,10 +78,11 @@ class SyncSimulatedPaymentSession:
         """
         computes the uncertainty network given our prior belief and prepares the min cost flow solver
 
-        This function can define a value for mu to control how heavily we combine the uncertainty cost and fees Also
+        This function can define a value for mu to control how heavily we combine the uncertainty cost and fees. Also,
         the function supports only taking channels into account that don't charge a base_fee higher or equal to `base`
 
-        returns the instantiated min_cost_flow object from the Google OR-lib that contains the piecewise linearized problem
+        returns the instantiated min_cost_flow object from the Google OR-lib that contains the piecewise linearized
+        problem
         """
         self._min_cost_flow = pywrapgraph.SimpleMinCostFlow()
         self._arc_to_channel = {}
@@ -111,22 +117,21 @@ class SyncSimulatedPaymentSession:
         # add amount to sending node
         try:
             self._min_cost_flow.SetNodeSupply(self._mcf_id[src], int(amt))  # /QUANTIZATION))
-        except KeyError:
+        except KeyError as error:
             if src not in self._mcf_id:
-                logging.warning("method '_prepare_mcf_solver', self._mcf_id[src]: src '%s' not in mcf network", src)
-            else:
-                logging.warning("some unspecified error in _min_cost_flow.SetNodeSupply")
-            exit(-1)
+                logging.debug(error)
+                logging.debug("method '_prepare_mcf_solver', self._mcf_id[src] not in mcf network. src: '%s'", src)
+                raise (MCFSolverError("in SyncSimulatedPaymentSession._prepare_mcf_solver: "
+                                      " _min_cost_flow.SetNodeSupply:  ->  Node not in Graph"))
 
-        # add -amount to recipient nods
+                # add -amount to recipient nods
         try:
             self._min_cost_flow.SetNodeSupply(self._mcf_id[dest], -int(amt))  # /QUANTIZATION))
         except KeyError:
             if dest not in self._mcf_id:
-                logging.warning("method '_prepare_mcf_solver', self._mcf_id[dest]: dest '%s' not in mcf network", dest)
+                logging.debug("method '_prepare_mcf_solver', self._mcf_id[dest]: dest '%s' not in mcf network", dest)
             else:
-                logging.warning("some unspecified error in _min_cost_flow.SetNodeSupply")
-            exit(-1)
+                logging.warning("some unspecified error in _min_cost_flow.SetNodeSupply")  # Fixme KeyError
 
     def _next_hop(self, path):
         """
@@ -226,15 +231,16 @@ class SyncSimulatedPaymentSession:
         """
         # First we prepare the min cost flow by getting arcs from the uncertainty network
         self._prepare_mcf_solver(src, dest, amt, mu, base)
+
         start = time.time()
         # print("solving mcf...")
         status = self._min_cost_flow.Solve()
 
         if status != self._min_cost_flow.OPTIMAL:
-            logging.warning('Error trying to deliver %s sats from %s to %s.', amt, src, dest)
-            logging.warning('There was an issue with the min cost flow input.')
-            logging.warning(f'Status: {status}')
-            exit(1)
+            logging.debug('Error trying to deliver %s sats from %s to %s.', amt, src, dest)
+            raise MCFSolverError(f'There is an issue with the min cost flow solver in '
+                                 f'SyncSimulatedPaymentSession_generate_candidate_paths, '
+                                 f'_min_cost_flow.Solve(). Status: {status}')
 
         attempts_in_round = self._dissect_flow_to_paths(src, dest)
         end = time.time()
@@ -293,7 +299,7 @@ class SyncSimulatedPaymentSession:
         amt = 0
         arrived_attempts = []
         failed_attempts = []
-        print("\nStatistics about {} candidate onions:\n".format(len(attempts)))
+        print("\nStatistics about {} candidate onion(s):".format(len(attempts)))
         for attempt in attempts:
             if attempt.status == AttemptStatus.ARRIVED:
                 arrived_attempts.append(attempt)
@@ -311,7 +317,7 @@ class SyncSimulatedPaymentSession:
                 amt += amount
                 total_fees += fee
                 expected_sats_to_deliver += probability * amount
-                print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
+                print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5} \n".format(
                     probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
                 paid_fees += fee
 
@@ -326,19 +332,20 @@ class SyncSimulatedPaymentSession:
                 amt += amount
                 total_fees += fee
                 expected_sats_to_deliver += probability * amount
-                print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5} ".format(
+                print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5} \n".format(
                     probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
                 residual_amt += amount
 
         logging.debug("Attempt Summary:")
         logging.debug("=================")
         logging.debug("Tried to deliver \t{:10} sats".format(amt))
-        fraction = expected_sats_to_deliver * 100. / amt
-        logging.debug("expected to deliver \t{:10} sats \t({:4.2f}%)".format(
-            int(expected_sats_to_deliver), fraction))
-        fraction = (amt - residual_amt) * 100. / amt
-        logging.debug("actually delivered \t{:10} sats \t({:4.2f}%)".format(
-            amt - residual_amt, fraction))
+        if amt != 0:
+            fraction = expected_sats_to_deliver * 100. / amt
+            logging.debug("expected to deliver \t{:10} sats \t({:4.2f}%)".format(
+                int(expected_sats_to_deliver), fraction))
+            fraction = (amt - residual_amt) * 100. / amt
+            logging.debug("actually delivered \t{:10} sats \t({:4.2f}%)".format(
+                amt - residual_amt, fraction))
         logging.debug("deviation:\t\t\t{:4.2f}".format(
             (amt - residual_amt) / (expected_sats_to_deliver + 1)))
         logging.debug("planned_fee: \t{:8.3f} sat".format(total_fees))

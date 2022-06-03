@@ -22,7 +22,7 @@ class Payment:
     :type total_amount: class:`int`
     """
 
-    def __init__(self, sender, receiver, total_amount: int = 1):
+    def __init__(self, sender: str, receiver: str, total_amount: int):
         """Constructor method
         """
         self._successful = False

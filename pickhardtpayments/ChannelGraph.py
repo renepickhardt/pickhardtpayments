@@ -22,7 +22,7 @@ class ChannelGraph:
 
     def __init__(self, lightning_cli_listchannels_json_file: str):
         """
-        Importing the channel_graph from c-lightning listchannels command. The file can be received by
+        Importing the _channel_graph from c-lightning listchannels command. The file can be received by
         #$ lightning-cli listchannels > listchannels.json
 
         """

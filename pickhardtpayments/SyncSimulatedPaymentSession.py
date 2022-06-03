@@ -9,23 +9,18 @@ An example payment is executed and statistics are run.
 
 import logging
 import sys
-
+import time
+import networkx as nx
+from ortools.graph import pywrapgraph
 from pickhardtpayments.Attempt import Attempt, AttemptStatus
 from pickhardtpayments.Payment import Payment
 from UncertaintyNetwork import UncertaintyNetwork
 from OracleLightningNetwork import OracleLightningNetwork
 
-
-from ortools.graph import pywrapgraph
-
-import time
-import networkx as nx
-
 DEFAULT_BASE_THRESHOLD = 0
 
 
 def set_logger():
-    # Set Logger
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s.%(msecs)03d | %(levelname)s | %(message)s', datefmt='%H:%M:%S')
@@ -114,12 +109,24 @@ class SyncSimulatedPaymentSession:
             self._min_cost_flow.SetNodeSupply(self._mcf_id[i], 0)
 
         # add amount to sending node
-        self._min_cost_flow.SetNodeSupply(
-            self._mcf_id[src], int(amt))  # /QUANTIZATION))
+        try:
+            self._min_cost_flow.SetNodeSupply(self._mcf_id[src], int(amt))  # /QUANTIZATION))
+        except KeyError:
+            if src not in self._mcf_id:
+                logging.warning("method '_prepare_mcf_solver', self._mcf_id[src]: src '%s' not in mcf network", src)
+            else:
+                logging.warning("some unspecified error in _min_cost_flow.SetNodeSupply")
+            exit(-1)
 
         # add -amount to recipient nods
-        self._min_cost_flow.SetNodeSupply(
-            self._mcf_id[dest], -int(amt))  # /QUANTIZATION))
+        try:
+            self._min_cost_flow.SetNodeSupply(self._mcf_id[dest], -int(amt))  # /QUANTIZATION))
+        except KeyError:
+            if dest not in self._mcf_id:
+                logging.warning("method '_prepare_mcf_solver', self._mcf_id[dest]: dest '%s' not in mcf network", dest)
+            else:
+                logging.warning("some unspecified error in _min_cost_flow.SetNodeSupply")
+            exit(-1)
 
     def _next_hop(self, path):
         """
@@ -224,8 +231,9 @@ class SyncSimulatedPaymentSession:
         status = self._min_cost_flow.Solve()
 
         if status != self._min_cost_flow.OPTIMAL:
-            print('There was an issue with the min cost flow input.')
-            print(f'Status: {status}')
+            logging.warning('Error trying to deliver %s sats from %s to %s.', amt, src, dest)
+            logging.warning('There was an issue with the min cost flow input.')
+            logging.warning(f'Status: {status}')
             exit(1)
 
         attempts_in_round = self._dissect_flow_to_paths(src, dest)
@@ -292,47 +300,49 @@ class SyncSimulatedPaymentSession:
             if attempt.status == AttemptStatus.FAILED:
                 failed_attempts.append(attempt)
 
-        print("successful attempts:")
-        print("--------------------")
-        for arrived_attempt in arrived_attempts:
-            fee = arrived_attempt.routing_fee / 1000.
-            probability = arrived_attempt.probability
-            path = arrived_attempt.path
-            amount = arrived_attempt.amount
-            amt += amount
-            total_fees += fee
-            expected_sats_to_deliver += probability * amount
-            print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
-                probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
-            paid_fees += fee
+        if arrived_attempts:
+            print("successful attempts:")
+            print("--------------------")
+            for arrived_attempt in arrived_attempts:
+                fee = arrived_attempt.routing_fee / 1000.
+                probability = arrived_attempt.probability
+                path = arrived_attempt.path
+                amount = arrived_attempt.amount
+                amt += amount
+                total_fees += fee
+                expected_sats_to_deliver += probability * amount
+                print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
+                    probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
+                paid_fees += fee
 
-        print("\nfailed attempts:")
-        print("----------------")
-        for failed_attempt in failed_attempts:
-            fee = failed_attempt.routing_fee / 1000.
-            probability = failed_attempt.probability
-            path = failed_attempt.path
-            amount = failed_attempt.amount
-            amt += amount
-            total_fees += fee
-            expected_sats_to_deliver += probability * amount
-            print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5} ".format(
-                probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
-            residual_amt += amount
+        if failed_attempts:
+            print("\nfailed attempts:")
+            print("----------------")
+            for failed_attempt in failed_attempts:
+                fee = failed_attempt.routing_fee / 1000.
+                probability = failed_attempt.probability
+                path = failed_attempt.path
+                amount = failed_attempt.amount
+                amt += amount
+                total_fees += fee
+                expected_sats_to_deliver += probability * amount
+                print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5} ".format(
+                    probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
+                residual_amt += amount
 
-        print("\nAttempt Summary:")
-        print("=================")
-        print("\nTried to deliver \t{:10} sats".format(amt))
+        logging.debug("Attempt Summary:")
+        logging.debug("=================")
+        logging.debug("Tried to deliver \t{:10} sats".format(amt))
         fraction = expected_sats_to_deliver * 100. / amt
-        print("expected to deliver {:10} sats \t({:4.2f}%)".format(
+        logging.debug("expected to deliver \t{:10} sats \t({:4.2f}%)".format(
             int(expected_sats_to_deliver), fraction))
         fraction = (amt - residual_amt) * 100. / amt
-        print("actually delivered \t{:10} sats \t({:4.2f}%)".format(
+        logging.debug("actually delivered \t{:10} sats \t({:4.2f}%)".format(
             amt - residual_amt, fraction))
-        print("deviation: \t\t{:4.2f}".format(
+        logging.debug("deviation:\t\t\t{:4.2f}".format(
             (amt - residual_amt) / (expected_sats_to_deliver + 1)))
-        print("planned_fee: \t{:8.3f} sat".format(total_fees))
-        print("paid fees: \t\t{:8.3f} sat".format(paid_fees))
+        logging.debug("planned_fee: \t{:8.3f} sat".format(total_fees))
+        logging.debug("paid fees:\t\t{:8.3f} sat".format(paid_fees))
         return residual_amt, paid_fees, len(attempts), len(failed_attempts)
 
     def forget_information(self):
@@ -365,7 +375,6 @@ class SyncSimulatedPaymentSession:
         total_number_failed_paths = 0
 
         # Initialise Payment
-        # currently with underscore to not mix up with existing variable 'payment'
         payment = Payment(src, dest, amt)
 
         # This is the main payment loop. It is currently blocking and synchronous but may be
@@ -425,5 +434,5 @@ class SyncSimulatedPaymentSession:
             payment.end_time - payment.start_time))
         print("Learnt entropy: {:5.2f} bits".format(entropy_start - entropy_end))
         print("fee for settlement of delivery: {:8.3f} sat --> {} ppm".format(
-            payment.settlement_fees/1000, int(payment.settlement_fees * 1000 / payment.total_amount)))
+            payment.settlement_fees / 1000, int(payment.settlement_fees * 1000 / payment.total_amount)))
         print("used mu:", mu)

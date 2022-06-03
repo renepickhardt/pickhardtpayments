@@ -1,12 +1,19 @@
-from .SyncSimulatedPaymentSession import SyncSimulatedPaymentSession
-from .UncertaintyNetwork import UncertaintyNetwork
-from .OracleLightningNetwork import OracleLightningNetwork
+"""
+===========================
+SyncPaymentSession
+===========================
 
-from ortools.graph import pywrapgraph
+a child of SyncSimulatedPaymentSession, that overloads some functions when needed for the Channel Depletion Simulation
+"""
 
-from typing import List
+import logging
 import time
-import networkx as nx
+
+from SyncSimulatedPaymentSession import SyncSimulatedPaymentSession, MCFSolverError
+from pickhardtpayments.Attempt import AttemptStatus
+from pickhardtpayments.Payment import Payment
+from UncertaintyNetwork import UncertaintyNetwork
+from OracleLightningNetwork import OracleLightningNetwork
 
 DEFAULT_BASE_THRESHOLD = 0
 
@@ -32,64 +39,93 @@ class SyncPaymentSession(SyncSimulatedPaymentSession):
                                              uncertainty_network,
                                              prune_network)
 
+    # noinspection DuplicatedCode
     def pickhardt_pay(self, src, dest, amt, mu=1, base=0):
         """
         conduct one experiment! might need to call oracle.reset_uncertainty_network() first
         I could not put it here as some experiments require sharing of liquidity information
 
         """
-        print("this method 'pickhardt_pay' in 'SyncPaymentSession' overloads original pickhardt_pay and will not only send onions but sendpay")
-        # TODO rework pay method to not only onionsend but pay; make sure that OracleLightningNetwork is updated correspondingly
 
-        return
+        # TODO rework pay method to not only onionsend but pay; make sure that OracleLightningNetwork is updated
+        #  correspondingly
+
+        # Setup
         entropy_start = self._uncertainty_network.entropy()
-        start = time.time()
-        full_amt = amt
         cnt = 0
         total_fees = 0
-        number_number_of_onions = 0
         total_number_failed_paths = 0
+
+        # Initialise Payment
+        payment = Payment(src, dest, amt)
 
         # This is the main payment loop. It is currently blocking and synchronous but may be
         # implemented in a concurrent way. Also, we stop after 10 rounds which is pretty arbitrary
         # a better stop criteria would be if we compute infeasible flows or if the probabilities
         # are too low or residual amounts decrease to slowly
         while amt > 0 and cnt < 10:
-            print("Round number: ", cnt + 1)
-            print("Try to deliver", amt, "satoshi:")
+            logging.debug("Round number: %s", cnt + 1)
+            logging.debug("Try to deliver %s satoshi:", amt)
 
-            # transfer to a min cost flow problem and run the solver
-            paths, runtime = self._generate_candidate_paths(
-                src, dest, amt, mu, base)
-
-            # compute some statistics about candidate paths
-            payments = self._estimate_payment_statistics(paths)
-
-            # make attempts and update our information about the UncertaintyNetwork
-            self._attempt_payments(payments)
-
-            # run some simple statistics and depict them
-            amt, paid_fees, num_paths, number_failed_paths = self._evaluate_attempts(
-                payments)
-            print("Runtime of flow computation: {:4.2f} sec ".format(runtime))
-            print("\n================================================================\n")
-
-            number_number_of_onions += num_paths
-            total_number_failed_paths += number_failed_paths
-            total_fees += paid_fees
+            sub_payment = Payment(payment.sender, payment.receiver, amt)
             cnt += 1
-        end = time.time()
+            # transfer to a min cost flow problem and run the solver
+            # paths is the lists of channels, runtime the time it took to calculate all candidates in this round
+            try:
+                paths, runtime = self._generate_candidate_paths(payment.sender, payment.receiver, amt, mu, base)
+                # logging.info("is src {} in ChannelGraph? {}".format(payment['_sender'], channel_graph.network.has_node(payment['_sender'])))
+                # logging.info("is dest {} in ChannelGraph? {}".format(payment['_receiver'],  channel_graph.network.has_node(payment['_receiver'])))
+            except MCFSolverError as error:
+                logging.error(error)
+                break
+
+            else:
+
+                sub_payment.add_attempts(paths)
+
+                # compute some statistics about candidate paths
+                self._estimate_payment_statistics(sub_payment.attempts)
+                # make attempts, try to send onion and register if success o r not
+                # update our information about the UncertaintyNetwork
+                self._attempt_payments(sub_payment.attempts)
+
+                # run some simple statistics and depict them
+                amt, paid_fees, num_paths, number_failed_paths = self._evaluate_attempts(
+                    sub_payment.attempts)
+
+                logging.debug("Runtime of flow computation: {:4.2f} sec ".format(runtime))
+                logging.debug("- - - - - - - - - - - - - - - - - - -")
+                total_number_failed_paths += number_failed_paths
+                total_fees += paid_fees
+
+                # add attempts of sub_payment to payment
+                payment.add_attempts(sub_payment.attempts)
+
+        # When residual amount is 0 / enough successful onions have been found, then settle payment. Else drop onions.
+        if amt == 0:
+            for onion in payment.filter_attempts(AttemptStatus.ARRIVED):
+                try:
+                    self._oracle.settle_payment(onion.path, onion.amount)
+                    onion.status = AttemptStatus.SETTLED
+                except Exception as e:
+                    print(e)
+                    return -1
+            payment.successful = True
+
+        payment.end_time = time.time()
+
         entropy_end = self._uncertainty_network.entropy()
-        print("SUMMARY:")
-        print("========")
-        print("Rounds of mcf-computations: ", cnt)
-        print("Number of onions sent: ", number_number_of_onions)
-        print("Number of failed onions: ", total_number_failed_paths)
-        print("Failure rate: {:4.2f}% ".format(
-            total_number_failed_paths * 100. / number_number_of_onions))
-        print("total runtime (including inefficient memory management): {:4.3f} sec".format(
-            end - start))
-        print("Learnt entropy: {:5.2f} bits".format(entropy_start - entropy_end))
-        print("Fees for successful delivery: {:8.3f} sat --> {} ppm".format(
-            total_fees, int(total_fees * 1000 * 1000 / full_amt)))
-        print("used mu:", mu)
+        logging.debug("SUMMARY of THIS Payment from Payment set in Simulation:")
+        logging.debug("==================================================")
+        logging.debug("Rounds of mcf-computations: \t%s", cnt)
+        logging.debug("Number of attempts made: \t%s", len(payment.attempts))
+        logging.debug("Number of failed attempts: \t%s", len(payment.filter_attempts(AttemptStatus.FAILED)))
+        if payment.attempts:
+            logging.debug("Failure rate: {:4.2f}% ".format(
+                len(payment.filter_attempts(AttemptStatus.FAILED)) * 100. / len(payment.attempts)))
+        logging.debug("total Payment lifetime (including inefficient memory management): {:4.3f} sec".format(
+            payment.end_time - payment.start_time))
+        logging.debug("Learnt entropy: {:5.2f} bits".format(entropy_start - entropy_end))
+        logging.debug("fee for settlement of delivery: {:8.3f} sat --> {} ppm".format(
+            payment.settlement_fees / 1000, int(payment.settlement_fees * 1000 / payment.total_amount)))
+        logging.debug("used mu: \t%s", mu)

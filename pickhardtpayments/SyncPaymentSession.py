@@ -75,7 +75,8 @@ class SyncPaymentSession(SyncSimulatedPaymentSession):
                 paths, runtime = self._generate_candidate_paths(payment.sender, payment.receiver, amt, mu, base)
             except MCFSolverError as error:
                 logging.error(error)
-                break
+                return -1
+                # break
             else:
 
                 sub_payment.add_attempts(paths)
@@ -112,13 +113,17 @@ class SyncPaymentSession(SyncSimulatedPaymentSession):
         payment.end_time = time.time()
 
         entropy_end = self._uncertainty_network.entropy()
-        logging.debug("SUMMARY of THIS Payment from Payment set in Simulation:")
-        logging.debug("==================================================")
-        logging.debug("Rounds of mcf-computations: \t%s", cnt)
-        logging.debug("Number of attempts made: \t%s", len(payment.attempts))
-        logging.debug("Number of failed attempts: \t%s", len(payment.filter_attempts(AttemptStatus.FAILED)))
+        logging.info("SUMMARY of THIS Payment from Payment set in Simulation:")
+        logging.info("=======================================================")
+        if payment.successful:
+            logging.debug("Payment was successful.")
+        else:
+            logging.debug("Payment failed.")
+        logging.info("Rounds of mcf-computations: \t%s", cnt)
+        logging.info("Number of attempts made:\t\t%s", len(payment.attempts))
+        logging.info("Number of failed attempts: \t%s", len(payment.filter_attempts(AttemptStatus.FAILED)))
         if payment.attempts:
-            logging.debug("Failure rate: {:4.2f}% ".format(
+            logging.info("Failure rate: {:4.2f}% ".format(
                 len(payment.filter_attempts(AttemptStatus.FAILED)) * 100. / len(payment.attempts)))
         logging.debug("total Payment lifetime (including inefficient memory management): {:4.3f} sec".format(
             payment.end_time - payment.start_time))
@@ -126,3 +131,4 @@ class SyncPaymentSession(SyncSimulatedPaymentSession):
         logging.debug("fee for settlement of delivery: {:8.3f} sat --> {} ppm".format(
             payment.settlement_fees / 1000, int(payment.settlement_fees * 1000 / payment.total_amount)))
         logging.debug("used mu: \t%s", mu)
+        return 1

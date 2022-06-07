@@ -107,13 +107,15 @@ def create_payment_set(_uncertainty_network, _number_of_payments, amount) -> lis
 # payment_set = create_payment_set(uncertainty_network, number_of_payments, mean_payment_amount)
 # logging.debug("Payments:\n%s", json.dumps(payment_set, indent=4, cls=PaymentEncoder))
 
-with open("payments.json") as jsonFile:
+with open("10_payments.json") as jsonFile:
     payment_set = json.load(jsonFile)
     jsonFile.close()
 
 logging.info("A total of {} payments.".format(len(payment_set)))
 
 c = 0
+successful_payments = 0
+failed_payments = 0
 for payment in payment_set:
     # create new payment session
     sim_session = SyncPaymentSession(oracle_lightning_network, uncertainty_network, prune_network=False)
@@ -123,7 +125,15 @@ for payment in payment_set:
     logging.info("*********** Payment {} ***********".format(c))
     logging.debug(f"now sending {payment['_total_amount']} sats from {payment['_sender']} to {payment['_receiver']}")
 
-    sim_session.pickhardt_pay(payment['_sender'], payment['_receiver'], payment['_total_amount'], mu=0, base=0)
+    ret = sim_session.pickhardt_pay(payment['_sender'], payment['_receiver'], payment['_total_amount'], mu=0, base=0)
+    if ret > 0:
+        successful_payments += 1
+        logging.info("Payment was successful.")
+    if ret < 0:
+        failed_payments += 1
+        logging.warning("Payment failed.")
+
+print(f"\n{c} payments. {successful_payments} successful, {failed_payments} failed.")
 
 exit(0)
 

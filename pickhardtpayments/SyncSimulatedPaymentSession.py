@@ -238,17 +238,29 @@ class SyncSimulatedPaymentSession:
         """
         # First we prepare the min cost flow by getting arcs from the uncertainty network
         self._prepare_mcf_solver(src, dest, amt, mu, base)
-
         start = time.time()
         # print("solving mcf...")
         status = self._min_cost_flow.Solve()
 
+        maximum_payable_amount = self._oracle.theoretical_maximum_payable_amount(src, dest, 1000)
+        logging.debug("%s sats would be possible on this oracle to deliver if including 1 sat base fee channels",
+                      maximum_payable_amount)
+        logging.debug("Sending %s sats", amt)
+        status_description = {
+            0: "NOT_SOLVED",
+            1: "OPTIMAL",
+            2: "FEASIBLE",
+            3: "INFEASIBLE",
+            4: "UNBALANCED",
+            5: "BAD_RESULT",
+            6: "BAD_COST_RANGE"
+        }
         if status != self._min_cost_flow.OPTIMAL:
             logging.debug('Error trying to deliver %s sats from %s to %s.', amt, src, dest)
-            logging.error('Reason: %s', traceback.format_exc())
-            raise MCFSolverError(f'There is an issue with the min cost flow solver in '
-                                 f'SyncSimulatedPaymentSession_generate_candidate_paths, '
-                                 f'_min_cost_flow.Solve(). Status: {status}')
+
+            raise MCFSolverError(f'MinCostFlowBase returns {status_description[status]} '
+                                 f'(in SyncSimulatedPaymentSession_generate_candidate_paths, '
+                                 f'_min_cost_flow.Solve().)')
 
         attempts_in_round = self._dissect_flow_to_paths(src, dest)
         end = time.time()
@@ -307,16 +319,17 @@ class SyncSimulatedPaymentSession:
         amt = 0
         arrived_attempts = []
         failed_attempts = []
-        print("\nStatistics about {} candidate onion(s):".format(len(attempts)))
+
+        logging.debug("Statistics about {} candidate onion(s):".format(len(attempts)))
         for attempt in attempts:
             if attempt.status == AttemptStatus.ARRIVED:
                 arrived_attempts.append(attempt)
             if attempt.status == AttemptStatus.FAILED:
                 failed_attempts.append(attempt)
 
-        if arrived_attempts:
-            print("successful attempts:")
-            print("--------------------")
+        if len(arrived_attempts) > 0:
+            logging.debug("successful attempts:")
+            logging.debug("--------------------")
             for arrived_attempt in arrived_attempts:
                 fee = arrived_attempt.routing_fee / 1000.
                 probability = arrived_attempt.probability
@@ -325,13 +338,13 @@ class SyncSimulatedPaymentSession:
                 amt += amount
                 total_fees += fee
                 expected_sats_to_deliver += probability * amount
-                print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5} \n".format(
+                logging.debug(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
                     probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
                 paid_fees += fee
 
-        if failed_attempts:
-            print("\nfailed attempts:")
-            print("----------------")
+        if len(failed_attempts) > 0:
+            logging.debug("failed attempts:")
+            logging.debug("----------------")
             for failed_attempt in failed_attempts:
                 fee = failed_attempt.routing_fee / 1000.
                 probability = failed_attempt.probability
@@ -340,7 +353,7 @@ class SyncSimulatedPaymentSession:
                 amt += amount
                 total_fees += fee
                 expected_sats_to_deliver += probability * amount
-                print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5} \n".format(
+                logging.debug(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5} ".format(
                     probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
                 residual_amt += amount
 

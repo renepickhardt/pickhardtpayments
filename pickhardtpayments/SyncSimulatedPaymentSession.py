@@ -121,24 +121,24 @@ class SyncSimulatedPaymentSession:
             self._min_cost_flow.SetNodeSupply(self._mcf_id[i], 0)
 
         # add amount to sending node
-        # try:
-        print("node id: ", self._mcf_id[src])
-        self._min_cost_flow.SetNodeSupply(self._mcf_id[src], int(amt))  # /QUANTIZATION))
-        # except KeyError as error:
-        #    if src not in self._mcf_id:
-        #        logging.debug(error)
-        #        logging.debug("method '_prepare_mcf_solver', self._mcf_id[src] not in mcf network. src: '%s'", src)
-        #        raise (MCFSolverError("in SyncSimulatedPaymentSession._prepare_mcf_solver: "
-        #                              " _min_cost_flow.SetNodeSupply:  ->  Node not in Graph"))
+        try:
+            self._min_cost_flow.SetNodeSupply(self._mcf_id[src], int(amt))  # /QUANTIZATION))
+        except KeyError as error:
+            if src not in self._mcf_id:
+                logging.debug(error)
+                logging.debug("method '_prepare_mcf_solver', self._mcf_id[src] not in mcf network. src: '%s'", src)
+                raise (MCFSolverError("in SyncSimulatedPaymentSession._prepare_mcf_solver: "
+                                      " _min_cost_flow.SetNodeSupply:  ->  Node not in Graph as source node"))
 
-                # add -amount to recipient nods
+        # add -amount to recipient nods
         try:
             self._min_cost_flow.SetNodeSupply(self._mcf_id[dest], -int(amt))  # /QUANTIZATION))
-        except KeyError:
+        except KeyError as error:
             if dest not in self._mcf_id:
+                logging.debug(error)
                 logging.debug("method '_prepare_mcf_solver', self._mcf_id[dest]: dest '%s' not in mcf network", dest)
-            else:
-                logging.warning("some unspecified error in _min_cost_flow.SetNodeSupply")  # Fixme KeyError
+                raise (MCFSolverError("in SyncSimulatedPaymentSession._prepare_mcf_solver: "
+                                      " _min_cost_flow.SetNodeSupply:  ->  Node not in Graph as destination node"))
 
     def _next_hop(self, path):
         """

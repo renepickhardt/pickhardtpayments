@@ -73,12 +73,9 @@ class SyncPaymentSession(SyncSimulatedPaymentSession):
             # paths is the lists of channels, runtime the time it took to calculate all candidates in this round
             try:
                 paths, runtime = self._generate_candidate_paths(payment.sender, payment.receiver, amt, mu, base)
-                # logging.info("is src {} in ChannelGraph? {}".format(payment['_sender'], channel_graph.network.has_node(payment['_sender'])))
-                # logging.info("is dest {} in ChannelGraph? {}".format(payment['_receiver'],  channel_graph.network.has_node(payment['_receiver'])))
             except MCFSolverError as error:
                 logging.error(error)
                 break
-
             else:
 
                 sub_payment.add_attempts(paths)

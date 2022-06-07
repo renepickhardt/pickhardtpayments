@@ -45,7 +45,7 @@ oracle_lightning_network = OracleLightningNetwork(channel_graph)
 nodes = {}
 
 # + Definition of number of payments to be sent
-number_of_payments = 3  # TODO how to decide on number of runs?
+number_of_payments = 10  # TODO how to decide on number of runs?
 
 # + Definition of distribution of payment amounts
 mean_payment_amount = 100_000
@@ -82,16 +82,20 @@ def assign_strategy_to_nodes(node):
             nodes[node][1] = 0
 
 
-def create_payment_set(_channel_graph, _number_of_payments, amount) -> list[Payment]:
-    if (len(_channel_graph.network.nodes)) < 3:
-        print("graph has less than two nodes")
+def create_payment_set(_uncertainty_network, _number_of_payments, amount) -> list[Payment]:
+    if (len(_uncertainty_network.network.nodes())) < 3:
+        logging.warning("graph has less than two nodes")
         exit(-1)
     _payments = []
-    for n in range(_number_of_payments):
+    while len(_payments) < _number_of_payments:
         # casting _channel_graph to list to avoid deprecation warning for python 3.9
-        _random_nodes = random.sample(list(_channel_graph.network.nodes), 2)
-        p = Payment(_random_nodes[0], _random_nodes[1], payment_amount(amount))
-        _payments.append(p)
+        _random_nodes = random.sample(list(_uncertainty_network.network.nodes), 2)
+        # additional check for existence; doing it here avoids the check in each round, improving runtime
+        src_exists = _random_nodes[0] in _uncertainty_network.network.nodes()
+        dest_exists = _random_nodes[1] in _uncertainty_network.network.nodes()
+        if src_exists and dest_exists:
+            p = Payment(_random_nodes[0], _random_nodes[1], payment_amount(amount))
+            _payments.append(p)
     # write payments to file
     json_file = open("payments.json", "w")
     json.dump(_payments, json_file, indent=4, cls=PaymentEncoder)
@@ -100,18 +104,16 @@ def create_payment_set(_channel_graph, _number_of_payments, amount) -> list[Paym
 
 
 # + Creation of a collection of N payments (src, rcv, amount)
-# payment_set = create_payment_set(channel_graph, number_of_payments, mean_payment_amount)
+# payment_set = create_payment_set(uncertainty_network, number_of_payments, mean_payment_amount)
 # logging.debug("Payments:\n%s", json.dumps(payment_set, indent=4, cls=PaymentEncoder))
 
-with open("failing_payment_1.json") as jsonFile:
+with open("payments.json") as jsonFile:
     payment_set = json.load(jsonFile)
     jsonFile.close()
 
 logging.info("A total of {} payments.".format(len(payment_set)))
 
 c = 0
-
-
 for payment in payment_set:
     # create new payment session
     sim_session = SyncPaymentSession(oracle_lightning_network, uncertainty_network, prune_network=False)
@@ -119,17 +121,9 @@ for payment in payment_set:
     sim_session.forget_information()  # TODO decide how often and when to forget information
     c += 1
     logging.info("*********** Payment {} ***********".format(c))
-    testnode = "021053940184f66d73ebeb80049d1ce5c3fd176e9c290ff9433aa6f25d839c31fb"
-    logging.warning(f"About node {testnode}:")
-    logging.warning("is it in Channel Graph? %s", testnode in channel_graph.network.nodes())
-    logging.warning("is it in Uncertainty Network? %s", testnode in uncertainty_network.network.nodes())
-    logging.warning("is it in OracleLightningNetwork? %s", testnode in oracle_lightning_network.network.nodes())
-    logging.warning("ID for MCF of the sender is %s", sim_session.get_mcf_id(testnode))
-    # maximum_payable_amount = oracle_lightning_network.theoretical_maximum_payable_amount(payment['_sender'], payment['_receiver'], 1000)
-    # logging.info("%s sats would be possible on this oracle to deliver if including 1 sat base fee channels", maximum_payable_amount)
     logging.debug(f"now sending {payment['_total_amount']} sats from {payment['_sender']} to {payment['_receiver']}")
 
-    # sim_session.pickhardt_pay(payment['_sender'], payment['_receiver'], payment['_total_amount'], mu=0, base=0)
+    sim_session.pickhardt_pay(payment['_sender'], payment['_receiver'], payment['_total_amount'], mu=0, base=0)
 
 exit(0)
 

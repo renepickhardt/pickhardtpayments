@@ -19,6 +19,7 @@ class ChannelFields():
     CLTV = 'delay'
     FLAGS = 'channel_flags'
     SHORT_CHANNEL_ID = 'short_channel_id'
+    BEE_LINE_DISTANCE = 'bee_line_distance'
 
 
 class Channel():
@@ -85,6 +86,10 @@ class Channel():
     @property
     def short_channel_id(self):
         return self._cln_jsn[ChannelFields.SHORT_CHANNEL_ID]
+    
+    @property
+    def bee_line_distance(self):
+        return self._cln_jsn[ChannelFields.BEE_LINE_DISTANCE]
 
     def __str__(self):
         return str(self._cln_jsn)

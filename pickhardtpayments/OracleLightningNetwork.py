@@ -1,3 +1,4 @@
+import logging
 from typing import List
 
 from pickhardtpayments.Channel import Channel
@@ -92,8 +93,14 @@ class OracleLightningNetwork(ChannelGraph):
             if settlement_channel.actual_liquidity > payment_amount:
                 # decrease channel balance in sending channel by amount
                 settlement_channel.actual_liquidity = settlement_channel.actual_liquidity - payment_amount
-                # increase channel balance in the other direction by amount
-                return_settlement_channel.actual_liquidity = return_settlement_channel.actual_liquidity + payment_amount
+                try:
+                    # increase channel balance in the other direction by amount
+                    return_settlement_channel.actual_liquidity = return_settlement_channel.actual_liquidity + payment_amount
+                except Exception as e:
+                    logging.error("return channel is %s", return_settlement_channel)
+                    logging.error("return channel does not exist in oracle network")
+                    logging.error(e)
+                    raise Exception()
             else:
                 raise Exception("""Channel liquidity on Channel {} is lower than payment amount.
                     \nPayment cannot settle.""".format(channel.short_channel_id))

@@ -1,3 +1,5 @@
+import logging
+
 import networkx as nx
 import json
 from Channel import Channel
@@ -46,3 +48,19 @@ class ChannelGraph:
         if self.network.has_edge(src, dest):
             if short_channel_id in self.network[src][dest]:
                 return self.network[src][dest][short_channel_id]["channel"]
+
+    def only_channels_with_return_channels(self):
+        channels_with_no_return_channel = []
+        for edge in self._channel_graph.edges:
+            if not self._channel_graph.has_edge(edge[1], edge[0]):
+                channels_with_no_return_channel.append(edge)
+
+        for edge in channels_with_no_return_channel:
+            self._channel_graph.remove_edge(edge[0], edge[1], edge[2])
+
+        if len(channels_with_no_return_channel) == 0:
+            logging.debug("channel graph only had channels in both directions.")
+        else:
+            logging.debug("channel graph had unannounced channels.")
+
+        return self

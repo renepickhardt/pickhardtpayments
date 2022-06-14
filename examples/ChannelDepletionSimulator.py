@@ -38,17 +38,18 @@ logging.info('*** new payment simulation ***')
 # *** Setup ***
 # + Definition of network that serves as OracleLightningNetwork
 # channel_graph = ChannelGraph("examples/channels.sample.json")
-channel_graph = ChannelGraph("listchannels20220412.json")
-uncertainty_network = UncertaintyNetwork(channel_graph)
-oracle_lightning_network = OracleLightningNetwork(channel_graph)
+channel_graph = ChannelGraph("examples/channels.sample.json")  # listchannels20220412
+clean_channel_graph = channel_graph.only_channels_with_return_channels()
+uncertainty_network = UncertaintyNetwork(clean_channel_graph)
+oracle_lightning_network = OracleLightningNetwork(clean_channel_graph)
 
 nodes = {}
 
 # + Definition of number of payments to be sent
-number_of_payments = 10  # TODO how to decide on number of runs?
+number_of_payments = 20  # TODO how to decide on number of runs?
 
 # + Definition of distribution of payment amounts
-mean_payment_amount = 100_000
+mean_payment_amount = 10_000
 
 
 def payment_amount(amount=10_000_000) -> int:
@@ -97,7 +98,7 @@ def create_payment_set(_uncertainty_network, _number_of_payments, amount) -> lis
             p = Payment(_random_nodes[0], _random_nodes[1], payment_amount(amount))
             _payments.append(p)
     # write payments to file
-    json_file = open("payments.json", "w")
+    json_file = open("examples/large_graph_20_payments_10000_mean_amount.json", "w")
     json.dump(_payments, json_file, indent=4, cls=PaymentEncoder)
     json_file.close()
     return _payments
@@ -107,7 +108,7 @@ def create_payment_set(_uncertainty_network, _number_of_payments, amount) -> lis
 # payment_set = create_payment_set(uncertainty_network, number_of_payments, mean_payment_amount)
 # logging.debug("Payments:\n%s", json.dumps(payment_set, indent=4, cls=PaymentEncoder))
 
-with open("10_payments.json") as jsonFile:
+with open("examples/4_nodes_5000_payments_10000_mean_amount.json") as jsonFile:  # failing_payments.json
     payment_set = json.load(jsonFile)
     jsonFile.close()
 
@@ -116,16 +117,16 @@ logging.info("A total of {} payments.".format(len(payment_set)))
 c = 0
 successful_payments = 0
 failed_payments = 0
+# create new payment session - will later be moved before payment loop to simulate sequence of payments
+sim_session = SyncPaymentSession(oracle_lightning_network, uncertainty_network, prune_network=False)
+
 for payment in payment_set:
-    # create new payment session
-    sim_session = SyncPaymentSession(oracle_lightning_network, uncertainty_network, prune_network=False)
-    # we need to make sure we forget all learnt information on the Uncertainty Network
-    sim_session.forget_information()  # TODO decide how often and when to forget information
     c += 1
     logging.info("*********** Payment {} ***********".format(c))
     logging.debug(f"now sending {payment['_total_amount']} sats from {payment['_sender']} to {payment['_receiver']}")
 
     ret = sim_session.pickhardt_pay(payment['_sender'], payment['_receiver'], payment['_total_amount'], mu=0, base=0)
+    sim_session.forget_information()
     if ret > 0:
         successful_payments += 1
         logging.info("Payment was successful.")
@@ -134,31 +135,3 @@ for payment in payment_set:
         logging.warning("Payment failed.")
 
 print(f"\n{c} payments. {successful_payments} successful, {failed_payments} failed.")
-
-exit(0)
-
-# we run the simulation of all pickhardt payments and track all the results
-# for payment in payment_set:
-# TODO register OracleLightningNetwork pre simulation
-# TODO rework pay method to not only onionsend but pay
-
-
-# TODO update OracleLightningNetwork to reflect payment (make sure back channel is also updated)
-# TODO decide on method to save
-# TODO register OracleLightningNetwork post simulation (and create diff OLN?)
-
-logging.debug("""
-SETUP
-+ Definition of network that serves as OracleLightningNetwork
-+ Definition of Strategies that the sending nodes act upon
-+ Definition of number of runs
-+ Definition of distribution of payment amounts
-+ Creation of a collection of N payments (src, rcv, amount)
-
-BEHAVIOUR
-+ define strategy for routing: how many tries before calling it a failure (no route)
-+ define when settlement failed, what to do next - retry or record failure
-
-METRICS
-+ what do we record when (and why)
-""")

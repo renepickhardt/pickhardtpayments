@@ -1,5 +1,5 @@
-from .Channel import Channel
-from .OracleLightningNetwork import OracleLightningNetwork
+from pickhardtpayments.Channel import Channel
+from pickhardtpayments.OracleLightningNetwork import OracleLightningNetwork
 from math import log2 as log
 
 
@@ -21,11 +21,11 @@ class UncertaintyChannel(Channel):
     Most importantly the class stores our belief about the liquidity information of a channel.
     This is done by reducing the uncertainty interval from [0,`capacity`] to 
     [`min_liquidity`, `max_liquidity`].
-    Additionally we need to know how many sats we currently have allocated via outstanding onions
+    Additionally, we need to know how many sats we currently have allocated via outstanding onions
     to the channel which is stored in `inflight`.
 
     The most important API call is the `get_piecewise_linearized_costs` function that computes the
-    pieceweise linearized cost for a channel rising from uncertainty as well as routing fees.
+    piecewise linearized cost for a channel rising from uncertainty as well as routing fees.
     """
 
     TOTAL_NUMBER_OF_SATS = 21_000_000 * 100_000_000
@@ -81,7 +81,7 @@ class UncertaintyChannel(Channel):
 
     def allocate_amount(self, amt: int):
         """
-        assign or remove ammount that is assigned to be `in_flight`.
+        assign or remove amount that is assigned to be `in_flight`.
         """
         self.in_flight += amt
         if self.in_flight < 0:
@@ -123,7 +123,7 @@ class UncertaintyChannel(Channel):
 
         It also accounts for the number of satoshis we have already outstanding but have not received information about
 
-        FIXME: Potentially test other prior distributions like mixedmodels where most funds are on one side of the channel
+        FIXME: Potentially test other prior distributions like mixed models where most funds are on one side of the channel
         """
         if amt is None:
             amt = 0
@@ -154,7 +154,7 @@ class UncertaintyChannel(Channel):
 
         Warning: This API does not respect our belief about the channels liquidity or allocated in_flight HTLCs
         """
-        # TODO: Maybe change to `return amt*self.linlinearized_integer_uncertainty_unit_cost()`
+        # TODO: Maybe change to `return amt*self.linearized_integer_uncertainty_unit_cost()`
         return float(amt)/(self.capacity+1)
 
     def linearized_integer_uncertainty_unit_cost(self, use_conditional_capacity=True):
@@ -163,7 +163,7 @@ class UncertaintyChannel(Channel):
 
         FIXME: Instead of using the maximum capacity on the network it just assumes 150BTC to be max
         """
-        # FIXME: interesting! Quantization does not change unit cost as it cancles itself
+        # FIXME: interesting! Quantization does not change unit cost as it cancels itself
         # FIXME: use max satoshis available and control for quantization (makes mu depend on quantization....)
         if use_conditional_capacity:
             # FIXME: better choice of magic number but TOTAL_NUMBER_OF_SATS breaks solver
@@ -194,7 +194,7 @@ class UncertaintyChannel(Channel):
         return int(self.ppm*amt/1000.)
 
     def linearized_integer_routing_unit_cost(self):
-        "Note that the ppm is natively an integer and can just be taken as a unit cost for the solver"
+        """Note that the ppm is natively an integer and can just be taken as a unit cost for the solver"""
         return int(self.ppm)
 
     # FIXME: better default mu
@@ -263,7 +263,7 @@ class UncertaintyChannel(Channel):
         """
         updates our knowledge about the channel if we tried to probe it for amount `amt`
 
-        This API works ony if we have an Oracle that allows to ask the actual liquidity of a channel
+        This API works only if we have an Oracle that allows to ask the actual liquidity of a channel
         In mainnet Lightning our oracle will not work on a per_channel level. This will change the data
         flow. Here for simplicity of the simulation we make use of the Oracle on a per channel level
         """

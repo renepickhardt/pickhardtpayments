@@ -39,7 +39,7 @@ class OracleChannel(Channel):
         if 0 <= amt <= self.capacity:
             self._actual_liquidity = amt
         else:
-            raise ValueError("Oops! The amount to be assigned to channel liquidity is negative or higher than capacity")
+            raise ValueError(f"Liquidity for channel {self.short_channel_id} cannot be set. Amount {amt} is negative or higher than capacity")
 
     def can_forward(self, amt: int):
         """

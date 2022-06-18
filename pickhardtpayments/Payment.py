@@ -1,7 +1,7 @@
 import logging
 import time
 
-from Attempt import Attempt, AttemptStatus
+from .Attempt import Attempt, AttemptStatus
 
 
 class Payment:

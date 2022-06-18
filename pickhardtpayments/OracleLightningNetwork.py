@@ -80,7 +80,7 @@ class OracleLightningNetwork(ChannelGraph):
 
     def settle_payment(self, path: List[Channel], payment_amount: int):
         """
-        receives a dictionary with channels and payment amounts and adjusts the balances of the channels along the path.
+        receives a List of channels and payment amount and adjusts the balances of the channels along the path.
 
         settle_payment should only be called after all send_onions for a payment terminated successfully!
         # TODO testing

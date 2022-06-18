@@ -1,22 +1,22 @@
 from enum import Enum
 
-from pickhardtpayments import Channel
+from Channel import Channel
 
 
 class AttemptStatus(Enum):
     PLANNED = 1
     INFLIGHT = 2
-    ARRIVED = 3
-    FAILED = 4
-    SETTLED = 5
+    ARRIVED = 4
+    FAILED = 8
+    SETTLED = 16
 
 
 class Attempt:
     """
-    An Attempt describes a path (a set of channels) of an amount from sender to receiver.
+    An Attempt describes a path (a list of channels) of an amount from sender to receiver.
 
     When sending an amount of sats from sender to receiver, a payment is usually split up and sent across
-    several paths, to increase the probability of being successfully delivered. Each of this path is referred to as an
+    several paths, to increase the probability of being successfully delivered. Each of these paths is referred to as an
     Attempt.
     An Attempt consists of a list of Channels (class:Channel) and the amount in sats to be sent through this path.
 
@@ -31,14 +31,25 @@ class Attempt:
         """
         self._routing_fee = None
         self._probability = None
-        self._path = path
         self._status = AttemptStatus.PLANNED
-        self._amount = amount
+
+        if amount >= 0:
+            self._amount = amount
+        else:
+            raise ValueError("amount for payment attempts needs to be positive")
+
+        i = 1
+        valid_path = True
+        while i < len(path):
+            valid_path = valid_path and (path[i - 1].dest == path[i].src)
+            i += 1
+        if valid_path:
+            self._path = path
 
     def __str__(self):
         description = "Path with {} channels to deliver {} sats and status {}.".format(len(self._path),
                                                                                        self._amount, self._status.name)
-        if self._routing_fee > 0:
+        if self._routing_fee and self._routing_fee > 0:
             description += "\nsuccess probability of {:6.2f}% , fee of {:8.3f} sat and a ppm of {:5} ".format(
                 self._probability * 100, self._routing_fee/1000, int(self._routing_fee * 1000 / self._amount))
         return description

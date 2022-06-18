@@ -1,4 +1,4 @@
-from Channel import Channel
+from .Channel import Channel
 
 import random
 

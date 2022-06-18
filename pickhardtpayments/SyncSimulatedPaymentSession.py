@@ -8,10 +8,10 @@ An example payment is executed and statistics are run.
 import logging
 import sys
 
-from pickhardtpayments.Attempt import Attempt, AttemptStatus
-from pickhardtpayments.Payment import Payment
-from UncertaintyNetwork import UncertaintyNetwork
-from OracleLightningNetwork import OracleLightningNetwork
+from .Attempt import Attempt, AttemptStatus
+from .Payment import Payment
+from .UncertaintyNetwork import UncertaintyNetwork
+from .OracleLightningNetwork import OracleLightningNetwork
 
 
 from ortools.graph import pywrapgraph

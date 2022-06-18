@@ -1,6 +1,6 @@
-from pickhardtpayments.ChannelGraph import ChannelGraph
-from pickhardtpayments.OracleLightningNetwork import OracleLightningNetwork
-from pickhardtpayments.UncertaintyChannel import UncertaintyChannel
+from .ChannelGraph import ChannelGraph
+from .UncertaintyChannel import UncertaintyChannel
+from .OracleLightningNetwork import OracleLightningNetwork
 
 
 from typing import List

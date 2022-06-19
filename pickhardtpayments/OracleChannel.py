@@ -5,7 +5,7 @@ import random
 
 class OracleChannel(Channel):
     """
-    An OracleChannel us used in experiments and Simulations to form the (Oracle)LightningNetwork.
+    An OracleChannel is used in experiments and Simulations to form the (Oracle)LightningNetwork.
 
     It contains a ground truth about the Liquidity of a channel
     """

@@ -4,7 +4,7 @@ from pickhardtpayments.OracleLightningNetwork import OracleLightningNetwork
 from pickhardtpayments.SyncSimulatedPaymentSession import SyncSimulatedPaymentSession
 
 
-#we first need to import the chanenl graph from c-lightning jsondump
+#we first need to import the channel graph from core lightning jsondump
 #you can get your own data set via:
 # $: lightning-cli listchannels > listchannels20220412.json
 # alternatively you can go to https://ln.rene-pickhardt.de to find a data dump
@@ -12,7 +12,7 @@ channel_graph = ChannelGraph("listchannels20220412.json")
 
 uncertainty_network = UncertaintyNetwork(channel_graph)
 oracle_lightning_network = OracleLightningNetwork(channel_graph)
-#we create ourselves a payment session which in this case operates by sending out the onions
+#we create a payment session which in this case operates by sending out the onions
 #sequentially 
 payment_session = SyncSimulatedPaymentSession(oracle_lightning_network, 
                                  uncertainty_network,

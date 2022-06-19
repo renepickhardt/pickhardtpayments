@@ -46,7 +46,7 @@ class SyncSimulatedPaymentSession:
     UncertaintyChannel to the min_cost_flow object. 
 
     The main API call ist `pickhardt_pay` which invokes a sequential loop to conduct trial and error
-    attempts. The loop could easily send out all onions concurrently but this does not make sense
+    attmpts. The loop could easily send out all onions concurrently but this does not make sense 
     against the simulated OracleLightningNetwork. 
     """
 
@@ -160,7 +160,7 @@ class SyncSimulatedPaymentSession:
         """
         A standard algorithm to dissect a flow into several paths.
 
-        FIXME: Note that this dissection while accurate is probably not optimal in practise.
+        FIXME: Note that this disection while accurate is probably not optimal in practise. 
         As noted in our Probabilistic payment delivery paper the payment process is a bernoulli trial 
         and I assume it makes sense to dissect the flow into paths of similar likelihood to make most
         progress but this is a mere conjecture at this point. I expect quite a bit of research will be
@@ -212,7 +212,7 @@ class SyncSimulatedPaymentSession:
 
         This is one step within the payment loop.
 
-        Returns the residual amount of the `amt` that could not be delivered and the paid fees
+        Retuns the residual amount of the `amt` that could ne be delivered and the paid fees
         (on a per channel base not including fees for downstream fees) for the delivered amount
 
         the function also prints some results on statistics about the paths of the flow to stdout.

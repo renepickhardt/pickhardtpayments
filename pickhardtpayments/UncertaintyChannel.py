@@ -13,9 +13,9 @@ class UncertaintyChannel(Channel):
     UncertaintyNetwork.
 
     Since we optimize for reliability via a probability estimate for liquidity that is based
-    on the capacity of the channel the class contains the `capacity` as seen in the funding tx output.
+    on the capacity of the channel, the class contains the `capacity` as seen in the funding tx output.
 
-    As we also optimize for fees and want to be able to compute the fees of a flow the classe
+    As we also optimize for fees and want to be able to compute the fees of a flow ,the class
     contains information for the feerate (`ppm`) and the base_fee (`base`). 
 
     Most importantly the class stores our belief about the liquidity information of a channel.
@@ -91,7 +91,7 @@ class UncertaintyChannel(Channel):
     # FIXME: store timestamps when using setters so that we know when we learnt our belief
     def forget_information(self):
         """
-        resets the information that we belief to have about the channel. 
+        resets the information that we believe to have about the channel. 
         """
         self.min_liquidity = 0
         self.max_liquidity = self.capacity

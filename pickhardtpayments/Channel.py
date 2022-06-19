@@ -1,7 +1,7 @@
 class ChannelFields():
     """
     These are the values describing public data about channels that is either available
-    via gossip or via the Bitcoin Blockchain. Their format is taken from the c-lighting
+    via gossip or via the Bitcoin Blockchain. Their format is taken from the core lighting
     API. If you use a different implementation I suggest to write a wrapper around the
     `ChannelFields` and `Channel` class
     """
@@ -25,8 +25,8 @@ class Channel():
     """
     Stores the public available information of a channel.
 
-    The `Channel` Class is intended to be read only and internatlly stores
-    the data from c-lightning's `lightning-cli listchannels` command as a json.
+    The `Channel` Class is intended to be read only and internally stores
+    the data from core lightning's `lightning-cli listchannels` command as a json.
     If you retrieve data from a different implementation I suggest to overload
     the constructor and transform the information into the given json format
     """

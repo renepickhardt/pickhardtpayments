@@ -67,7 +67,7 @@ class UncertaintyNetwork(ChannelGraph):
 
     def activate_network_wide_uncertainty_reduction(self, n, oracle: OracleLightningNetwork):
         """
-        With the help of an `OracleLightningNetwork` probes all chennels `n` times to reduce uncertainty.
+        With the help of an `OracleLightningNetwork` probes all channels `n` times to reduce uncertainty.
 
         While one can do this on mainnet by probing we can do this very quickly in simulation
         at virtually no cost. Thus this API call needs to be taken with caution when using a different

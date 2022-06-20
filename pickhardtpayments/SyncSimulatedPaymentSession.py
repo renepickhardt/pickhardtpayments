@@ -19,8 +19,8 @@ class SyncSimulatedPaymentSession():
     This happens by adding several parallel arcs coming from the piece wise linearization of the
     UncertaintyChannel to the min_cost_flow object. 
 
-    The main API call ist `pickhardt_pay` which invokes a sequential loop to conduct trial and error
-    attmpts. The loop could easily send out all onions concurrently but this does not make sense 
+    The main API call is `pickhardt_pay` which invokes a sequential loop to conduct trial and error
+    attempts. The loop could easily send out all onions concurrently but this does not make sense 
     against the simulated OracleLightningNetwork. 
     """
 
@@ -96,7 +96,7 @@ class SyncSimulatedPaymentSession():
 
     def _next_hop(self, path):
         """
-        generator to iterate through edges indext by node id of paths
+        generator to iterate through edges indexed by node id of paths
 
         The path is a list of node ids. Each call returns a tuple src, dest of an edge in the path    
         """
@@ -133,9 +133,9 @@ class SyncSimulatedPaymentSession():
         """
         A standard algorithm to disect a flow into several paths.
 
-        FIXME: Note that this disection while accurate is probably not optimal in practise. 
+        FIXME: Note that this dissection while accurate is probably not optimal in practice. 
         As noted in our Probabilistic payment delivery paper the payment process is a bernoulli trial 
-        and I assume it makes sense to disect the flow into paths of similar likelihood to make most
+        and I assume it makes sense to dissect the flow into paths of similar likelihood to make most
         progress but this is a mere conjecture at this point. I expect quite a bit of research will be
         necessary to resolve this issue.
         """
@@ -186,7 +186,7 @@ class SyncSimulatedPaymentSession():
 
         This is one step within the payment loop.
 
-        Retuns the residual amount of the `amt` that could ne be delivered and the paid fees
+        Returns the residual amount of the `amt` that could ne be delivered and the paid fees
         (on a per channel base not including fees for downstream fees) for the delivered amount
 
         the function also prints some results an statistics about the paths of the flow to stdout.

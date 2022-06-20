@@ -8,7 +8,7 @@ class ChannelGraph():
     Represents the public information about the Lightning Network that we see from Gossip and the 
     Bitcoin Blockchain. 
 
-    The channels of the Channel Graph are directed and identiried uniquly by a triple consisting of
+    The channels of the Channel Graph are directed and identified uniquely by a triple consisting of
     (source_node_id, destination_node_id, short_channel_id). This allows the ChannelGraph to also 
     contain parallel channels.
     """
@@ -22,7 +22,7 @@ class ChannelGraph():
 
     def __init__(self, lightning_cli_listchannels_json_file: str):
         """
-        Importing the channel_graph from c-lightning listchannels command the file can be received by 
+        Importing the channel_graph from core lightning listchannels command the file can be received by 
         #$ lightning-cli listchannels > listchannels.json
 
         """

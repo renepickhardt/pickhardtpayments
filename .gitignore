@@ -5,4 +5,7 @@ pickhardtpayments/pickhardtpayments.egg-info
 pickhardtpayments/__pycache__
 
 # not including large file with Channel Graph
-listchannels*.json
+*.json
+examples/.json
+
+pickhardt_pay.log

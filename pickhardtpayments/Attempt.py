@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pickhardtpayments import Channel
+from Channel import Channel
 from pickhardtpayments import UncertaintyChannel
 
 
@@ -103,18 +103,19 @@ class Attempt:
         :param value: Current state of the Attempt
         :type value: AttemptStatus
         """
-        # remove allocated amounts when Attempt status changes from PLANNED
-        if self._status == AttemptStatus.PLANNED and not value == AttemptStatus.PLANNED:
-            for channel in self._path:
-                channel.allocate_amount(-self._amount)
+        if not self._status == value:
+            # remove allocated amounts when Attempt status changes from PLANNED
+            if self._status == AttemptStatus.PLANNED and not value == AttemptStatus.INFLIGHT:
+                for channel in self._path:
+                    channel.allocate_amount(-self._amount)
 
-        if self._status == AttemptStatus.PLANNED and value == AttemptStatus.ARRIVED:
-            # TODO write amount from inflight to min_liquidity/max_liquidity
-            # for channel in self._path:
-            #    channel.allocate_amount(-self._amount)
-            pass
+            if self._status == AttemptStatus.INFLIGHT and value == AttemptStatus.ARRIVED:
+                # TODO write amount from inflight to min_liquidity/max_liquidity
+                # for channel in self._path:
+                #    channel.allocate_amount(-self._amount)
+                pass
 
-        self._status = value
+            self._status = value
 
     @property
     def routing_fee(self) -> int:
@@ -133,4 +134,3 @@ class Attempt:
         :rtype: float
         """
         return self._probability
-

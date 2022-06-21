@@ -191,6 +191,7 @@ class SyncSimulatedPaymentSession:
                 path = nx.shortest_path(G, s, d)
             except:
                 break
+            print("used_flow = ", used_flow)
             channel_path, used_flow = self._make_channel_path(G, path)
             attempts.append(Attempt(channel_path, used_flow))
 
@@ -232,6 +233,7 @@ class SyncSimulatedPaymentSession:
         return attempts_in_round, end - start
 
     def _estimate_payment_statistics(self, attempts: list[Attempt]):
+        exit(0)  # FIXME: can go
         """
         estimates the success probability of paths and computes fees (without paying downstream fees)
 
@@ -239,9 +241,6 @@ class SyncSimulatedPaymentSession:
         """
         # compute fees and probabilities of candidate paths for evaluation
         for attempt in attempts:
-            attempt.routing_fee, attempt.probability = self._uncertainty_network.get_features_of_candidate_path(
-                attempt.path, attempt.amount)
-            # logging.debug("fee: {attempt.routing_fee} msat, p = {attempt.probability:.4%}, amount: {attempt.amount}")
 
             # to correctly compute conditional probabilities of non-disjoint paths in the same set of paths
             self._uncertainty_network.allocate_amount_on_path(attempt.path, attempt.amount)
@@ -263,9 +262,13 @@ class SyncSimulatedPaymentSession:
             success, erring_channel = self._oracle.send_onion(
                 attempt.path, attempt.amount)
             if success:
+                # TODO: let this happen in Payment class? Or in Attempt class - with status change as settlement
                 attempt.status = AttemptStatus.ARRIVED
+                # handling amounts on path happens in Attempt Class.
                 self._uncertainty_network.allocate_amount_on_path(
                     attempt.path, attempt.amount)
+
+
                 # unnecessary, because information is in attempt (Status INFLIGHT)
                 # settled_onions.append(payments[key])
             else:
@@ -381,8 +384,6 @@ class SyncSimulatedPaymentSession:
             paths, runtime = self._generate_candidate_paths(payment.sender, payment.receiver, amt, mu, base)
             sub_payment.add_attempts(paths)
 
-            # compute some statistics about candidate paths
-            self._estimate_payment_statistics(sub_payment.attempts)
             # make attempts, try to send onion and register if success or not
             # update our information about the UncertaintyNetwork
             self._attempt_payments(sub_payment.attempts)

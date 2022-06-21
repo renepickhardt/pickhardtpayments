@@ -263,7 +263,7 @@ class UncertaintyChannel(Channel):
         """
         updates our knowledge about the channel if we tried to probe it for amount `amt`
 
-        This API works ony if we have an Oracle that allows to ask the actual liquidity of a channel
+        This API works only if we have an Oracle that allows to ask the actual liquidity of a channel
         In mainnet Lightning our oracle will not work on a per_channel level. This will change the data
         flow. Here for simplicity of the simulation we make use of the Oracle on a per channel level
         """

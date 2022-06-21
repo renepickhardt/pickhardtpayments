@@ -51,7 +51,7 @@ class UncertaintyNetwork(ChannelGraph):
         for channel in path:
             routing_fees += channel.routing_cost_msat(amt)
             probability *= channel.success_probability(amt)
-        return routing_fees, probability
+        return probability
 
     def allocate_amount_on_path(self, path: List[UncertaintyChannel], amt: int):
         """

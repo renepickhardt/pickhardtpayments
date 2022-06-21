@@ -1,6 +1,7 @@
 from enum import Enum
 
-from Channel import Channel
+from pickhardtpayments import Channel
+from pickhardtpayments import UncertaintyChannel
 
 
 class AttemptStatus(Enum):
@@ -15,10 +16,14 @@ class Attempt:
     """
     An Attempt describes a path (a list of channels) of an amount from sender to receiver.
 
+    # TODO Describe life cycle of an Attempt
+
     When sending an amount of sats from sender to receiver, a payment is usually split up and sent across
     several paths, to increase the probability of being successfully delivered. Each of these paths is referred to as an
     Attempt.
     An Attempt consists of a list of Channels (class:Channel) and the amount in sats to be sent through this path.
+    When an Attempt is instantiated, the given amount is allocated to the inflight amount in the channels of the
+    path and the AttemptStatus is set to PLANNED.
 
     :param path: a list of Channel objects from sender to receiver
     :type path: list[Channel]
@@ -26,13 +31,9 @@ class Attempt:
     :type amount: int
     """
 
-    def __init__(self, path: list[Channel], amount: int = 0):
+    def __init__(self, path: list[UncertaintyChannel], amount: int = 0):
         """Constructor method
         """
-        self._routing_fee = None
-        self._probability = None
-        self._status = AttemptStatus.PLANNED
-
         if amount >= 0:
             self._amount = amount
         else:
@@ -45,6 +46,18 @@ class Attempt:
             i += 1
         if valid_path:
             self._path = path
+
+        channel: UncertaintyChannel
+        self._routing_fee = 0
+        self._probability = 1
+        for channel in path:
+            self._routing_fee += channel.routing_cost_msat(amount)
+            self._probability *= channel.success_probability(amount)
+            # When Attempt is created, all amounts are set inflight. Needs to be updated with AttemptStatus change!
+            # This is to correctly compute conditional probabilities of non-disjoint paths in the same set of paths
+            # channel.in_flight(amount)
+            channel.allocate_amount(amount)
+        self._status = AttemptStatus.PLANNED
 
     def __str__(self):
         description = "Path with {} channels to deliver {} sats and status {}.".format(len(self._path),
@@ -90,6 +103,17 @@ class Attempt:
         :param value: Current state of the Attempt
         :type value: AttemptStatus
         """
+        # remove allocated amounts when Attempt status changes from PLANNED
+        if self._status == AttemptStatus.PLANNED and not value == AttemptStatus.PLANNED:
+            for channel in self._path:
+                channel.allocate_amount(-self._amount)
+
+        if self._status == AttemptStatus.PLANNED and value == AttemptStatus.ARRIVED:
+            # TODO write amount from inflight to min_liquidity/max_liquidity
+            # for channel in self._path:
+            #    channel.allocate_amount(-self._amount)
+            pass
+
         self._status = value
 
     @property
@@ -101,15 +125,6 @@ class Attempt:
         """
         return self._routing_fee
 
-    @routing_fee.setter
-    def routing_fee(self, value: int):
-        """Sets the accrued routing fee in msat requested for this path
-
-        :param value: accrued routing fees for this attempt in msat
-        :type value: int
-        """
-        self._routing_fee = value
-
     @property
     def probability(self) -> float:
         """Returns estimated success probability before the attempt
@@ -119,13 +134,3 @@ class Attempt:
         """
         return self._probability
 
-    @probability.setter
-    def probability(self, value: int):
-        """Sets the estimated success probability of the attempt.
-
-        This is calculated as product of the channels' success probabilities as determined in the UncertaintyGraph.
-
-        :param value: estimated success probability of the attempt
-        :type value: float
-        """
-        self._probability = value

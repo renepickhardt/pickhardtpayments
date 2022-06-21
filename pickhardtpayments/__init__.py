@@ -1,5 +1,7 @@
 from .Channel import Channel, ChannelFields
 from .UncertaintyChannel import UncertaintyChannel
+from .Channel import Channel, ChannelFields
+from .UncertaintyChannel import UncertaintyChannel
 from .OracleChannel import OracleChannel
 from .UncertaintyNetwork import UncertaintyNetwork
 from .OracleLightningNetwork import OracleLightningNetwork

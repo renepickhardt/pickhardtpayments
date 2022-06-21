@@ -7,6 +7,7 @@ An example payment is executed and statistics are run.
 
 import logging
 import sys
+from typing import List
 
 from .Attempt import Attempt, AttemptStatus
 from .Payment import Payment
@@ -131,7 +132,7 @@ class SyncSimulatedPaymentSession:
             dest = path[i]
             yield src, dest
 
-    def _make_channel_path(self, G: nx.MultiDiGraph, path: list[str]):
+    def _make_channel_path(self, G: nx.MultiDiGraph, path: List[str]):
         """
         network x returns a path as a list of node_ids. However, we need a list of `UncertaintyChannels`
         Since the graph has parallel edges it is quite some work to get the actual channels that the
@@ -191,7 +192,6 @@ class SyncSimulatedPaymentSession:
                 path = nx.shortest_path(G, s, d)
             except:
                 break
-            print("used_flow = ", used_flow)
             channel_path, used_flow = self._make_channel_path(G, path)
             attempts.append(Attempt(channel_path, used_flow))
 
@@ -232,24 +232,6 @@ class SyncSimulatedPaymentSession:
         end = time.time()
         return attempts_in_round, end - start
 
-    def _estimate_payment_statistics(self, attempts: list[Attempt]):
-        exit(0)  # FIXME: can go
-        """
-        estimates the success probability of paths and computes fees (without paying downstream fees)
-
-        @returns the statistics in the Payment
-        """
-        # compute fees and probabilities of candidate paths for evaluation
-        for attempt in attempts:
-
-            # to correctly compute conditional probabilities of non-disjoint paths in the same set of paths
-            self._uncertainty_network.allocate_amount_on_path(attempt.path, attempt.amount)
-
-        # remove allocated amounts for all planned onions before doing actual attempts
-        for attempt in attempts:
-            self._uncertainty_network.allocate_amount_on_path(
-                attempt.path, -attempt.amount)
-
     def _attempt_payments(self, attempts: list[Attempt]):
         """
         we attempt all planned payments and test the success against the oracle in particular this
@@ -274,7 +256,7 @@ class SyncSimulatedPaymentSession:
             else:
                 attempt.status = AttemptStatus.FAILED
 
-    def _evaluate_attempts(self, attempts: list[Attempt]):
+    def _evaluate_attempts(self, payment: Payment):
         """
         helper function to collect statistics about attempts and print them
 
@@ -287,40 +269,28 @@ class SyncSimulatedPaymentSession:
         amt = 0
         arrived_attempts = []
         failed_attempts = []
-        print("\nStatistics about {} candidate onions:\n".format(len(attempts)))
-        for attempt in attempts:
-            if attempt.status == AttemptStatus.ARRIVED:
-                arrived_attempts.append(attempt)
-            if attempt.status == AttemptStatus.FAILED:
-                failed_attempts.append(attempt)
-
+        print("\nStatistics about {} candidate onions:\n".format(len(payment.attempts)))
         print("successful attempts:")
         print("--------------------")
-        for arrived_attempt in arrived_attempts:
-            fee = arrived_attempt.routing_fee / 1000.
-            probability = arrived_attempt.probability
-            path = arrived_attempt.path
-            amount = arrived_attempt.amount
-            amt += amount
-            total_fees += fee
-            expected_sats_to_deliver += probability * amount
+        for arrived_attempt in payment.filter_attempts(AttemptStatus.ARRIVED):
+            amt += arrived_attempt.amount
+            total_fees += arrived_attempt.routing_fee / 1000.
+            expected_sats_to_deliver += arrived_attempt.probability * arrived_attempt.amount
             print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
-                probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
-            paid_fees += fee
+                arrived_attempt.probability * 100, arrived_attempt.amount, len(arrived_attempt.path),
+                int(arrived_attempt.routing_fee * 1000 / arrived_attempt.amount)))
+            paid_fees += arrived_attempt.routing_fee
 
         print("\nfailed attempts:")
         print("----------------")
-        for failed_attempt in failed_attempts:
-            fee = failed_attempt.routing_fee / 1000.
-            probability = failed_attempt.probability
-            path = failed_attempt.path
-            amount = failed_attempt.amount
-            amt += amount
-            total_fees += fee
-            expected_sats_to_deliver += probability * amount
-            print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5} ".format(
-                probability * 100, amount, len(path), int(fee * 1000_000 / amount)))
-            residual_amt += amount
+        for failed_attempt in payment.filter_attempts(AttemptStatus.FAILED):
+            amt += failed_attempt.amount
+            total_fees += failed_attempt.routing_fee / 1000.
+            expected_sats_to_deliver += failed_attempt.probability * failed_attempt.amount
+            print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
+                failed_attempt.probability * 100, failed_attempt.amount, len(failed_attempt.path),
+                int(failed_attempt.routing_fee * 1000 / failed_attempt.amount)))
+            residual_amt += failed_attempt.amount
 
         print("\nAttempt Summary:")
         print("=================")
@@ -335,7 +305,7 @@ class SyncSimulatedPaymentSession:
             (amt - residual_amt) / (expected_sats_to_deliver + 1)))
         print("planned_fee: \t{:8.3f} sat".format(total_fees))
         print("paid fees: \t\t{:8.3f} sat".format(paid_fees))
-        return residual_amt, paid_fees, len(attempts), len(failed_attempts)
+        return residual_amt, paid_fees, len(payment.attempts), len(failed_attempts)
 
     def forget_information(self):
         """
@@ -350,7 +320,7 @@ class SyncSimulatedPaymentSession:
         self._uncertainty_network.activate_network_wide_uncertainty_reduction(
             n, self._oracle)
 
-    def pickhardt_pay(self, src, dest, amt, mu=1, base=0):
+    def pickhardt_pay(self, src, dest, amt, mu=1, base=DEFAULT_BASE_THRESHOLD):
         """
         conduct one experiment! might need to call oracle.reset_uncertainty_network() first
         I could not put it here as some experiments require sharing of liquidity information
@@ -390,7 +360,7 @@ class SyncSimulatedPaymentSession:
 
             # run some simple statistics and depict them
             amt, paid_fees, num_paths, number_failed_paths = self._evaluate_attempts(
-                sub_payment.attempts)
+                sub_payment)
 
             print("Runtime of flow computation: {:4.2f} sec ".format(runtime))
             print("\n================================================================\n")

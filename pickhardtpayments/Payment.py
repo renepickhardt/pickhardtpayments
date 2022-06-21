@@ -160,15 +160,7 @@ class Payment:
         :return: A list of successful Attempts of this Payment, which could be settled.
         :rtype: list[Attempt]
         """
-        filtered_attempts = []
-        try:
-            for attempt in self._attempts:
-                if attempt.status.value == flag.value:
-                    filtered_attempts.append(attempt)
-            return filtered_attempts
-        except ValueError:
-            logging.warning("ValueError in Payment.filtered_attempts")
-        return []
+        return [attempt for attempt in self._attempts if attempt.status.value == flag.value]
 
     @property
     def successful(self) -> bool:

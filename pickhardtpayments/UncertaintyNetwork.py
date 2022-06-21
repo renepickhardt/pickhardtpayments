@@ -41,18 +41,6 @@ class UncertaintyNetwork(ChannelGraph):
         """
         return sum(channel.entropy() for src, dest, channel in self.network.edges(data="channel"))
 
-    def get_features_of_candidate_path(self, path: List[UncertaintyChannel], amt: int) -> (float, float):
-        """
-        returns the routing fees and probability of a candidate path
-        :rtype: object
-        """
-        probability = 1
-        routing_fees = 0
-        for channel in path:
-            routing_fees += channel.routing_cost_msat(amt)
-            probability *= channel.success_probability(amt)
-        return probability
-
     def allocate_amount_on_path(self, path: List[UncertaintyChannel], amt: int):
         """
         allocates `amt` to all channels of the path of `UncertaintyChannels`

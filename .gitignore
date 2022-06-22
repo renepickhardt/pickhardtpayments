@@ -1,0 +1,11 @@
+.DS_Store
+__pycache__
+.idea
+pickhardtpayments/pickhardtpayments.egg-info
+pickhardtpayments/__pycache__
+
+# not including large file with Channel Graph
+*.json
+examples/.json
+
+pickhardt_pay.log

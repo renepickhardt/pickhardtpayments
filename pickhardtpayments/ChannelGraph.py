@@ -3,7 +3,7 @@ import json
 from .Channel import Channel
 
 
-class ChannelGraph():
+class ChannelGraph:
     """
     Represents the public information about the Lightning Network that we see from Gossip and the 
     Bitcoin Blockchain. 
@@ -15,7 +15,7 @@ class ChannelGraph():
 
     def _get_channel_json(self, filename: str):
         """
-        extracts the dictionary from the file that contains lightnig-cli listchannels json string
+        extracts the dictionary from the file that contains lightning-cli listchannels json string
         """
         f = open(filename)
         return json.load(f)["channels"]

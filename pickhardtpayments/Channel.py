@@ -1,4 +1,4 @@
-class ChannelFields():
+class ChannelFields:
     """
     These are the values describing public data about channels that is either available
     via gossip or via the Bitcoin Blockchain. Their format is taken from the core lighting
@@ -21,7 +21,7 @@ class ChannelFields():
     SHORT_CHANNEL_ID = 'short_channel_id'
 
 
-class Channel():
+class Channel:
     """
     Stores the public available information of a channel.
 

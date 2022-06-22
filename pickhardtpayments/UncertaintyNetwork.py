@@ -2,6 +2,7 @@ from .ChannelGraph import ChannelGraph
 from .UncertaintyChannel import UncertaintyChannel
 from .OracleLightningNetwork import OracleLightningNetwork
 
+
 from typing import List
 import networkx as nx
 
@@ -10,7 +11,7 @@ DEFAULT_BASE_THRESHOLD = 0
 
 class UncertaintyNetwork(ChannelGraph):
     """
-    The UncertaintayNetwork is the main data structure to store our belief about the 
+    The UncertaintyNetwork is the main data structure to store our belief about the
     Liquidity in the channels of the ChannelGraph.
 
     Most of its functionality comes from the UncertaintyChannel. Most notably the ability
@@ -40,17 +41,6 @@ class UncertaintyNetwork(ChannelGraph):
         """
         return sum(channel.entropy() for src, dest, channel in self.network.edges(data="channel"))
 
-    def get_features_of_candidate_path(self, path: List[UncertaintyChannel], amt: int) -> (float, float):
-        """
-        returns the routing fees and probability of a candidate path
-        """
-        probability = 1
-        routing_fees = 0
-        for channel in path:
-            routing_fees += channel.routing_cost_msat(amt)
-            probability *= channel.success_probability(amt)
-        return routing_fees, probability
-
     def allocate_amount_on_path(self, path: List[UncertaintyChannel], amt: int):
         """
         allocates `amt` to all channels of the path of `UncertaintyChannels`
@@ -70,7 +60,7 @@ class UncertaintyNetwork(ChannelGraph):
         With the help of an `OracleLightningNetwork` probes all channels `n` times to reduce uncertainty.
 
         While one can do this on mainnet by probing we can do this very quickly in simulation
-        at virtually no cost. Thus this API call needs to be taken with caution when using a different
+        at virtually no cost. Thus, this API call needs to be taken with caution when using a different
         oracle. 
         """
         for src, dest, channel in self.network.edges(data="channel"):
@@ -78,13 +68,13 @@ class UncertaintyNetwork(ChannelGraph):
 
     # FIXME: refactor to new code base. The following call will break!
     def activate_foaf_uncertainty_reduction(self, src, dest):
-        ego_netwok = set()
+        ego_network = set()
         foaf_network = set()
 
         out_set = set()
         edges = self.__channel_graph.out_edges(self.__node_key_to_id[src])
         for edge in edges:
-            ego_netwok.add("{}x{}".format(edge[0], edge[1]))
+            ego_network.add("{}x{}".format(edge[0], edge[1]))
             out_set.add(edge[1])
 
         for node in out_set:
@@ -95,7 +85,7 @@ class UncertaintyNetwork(ChannelGraph):
         in_set = set()
         edges = self.__channel_graph.in_edges(self.__node_key_to_id[dest])
         for edge in edges:
-            ego_netwok.add("{}x{}".format(edge[0], edge[1]))
+            ego_network.add("{}x{}".format(edge[0], edge[1]))
             in_set.add(edge[0])
 
         for node in in_set:
@@ -103,12 +93,12 @@ class UncertaintyNetwork(ChannelGraph):
             for edge in edges:
                 foaf_network.add("{}x{}".format(edge[0], edge[1]))
 
-        # print(len(ego_netwok))
+        # print(len(ego_network))
         for k, arc in self.__arcs.items():
             # print(k)
             vals = k.split("x")
             key = "{}x{}".format(vals[0], vals[1])
-            if key in ego_netwok:
+            if key in ego_network:
                 l = arc.get_actual_liquidity()
                 arc.update_knowledge(l-1)
                 arc.update_knowledge(l+1)
@@ -119,6 +109,6 @@ class UncertaintyNetwork(ChannelGraph):
                 l = arc.get_actual_liquidity()
                 arc.update_knowledge(l-1)
                 arc.update_knowledge(l+1)
-                #print(key, arc.entropy())
-        print("channels with full knowlege: ", len(ego_netwok))
+                # print(key, arc.entropy())
+        print("channels with full knowledge: ", len(ego_network))
         print("channels with 2 Bits of less entropy: ", len(foaf_network))

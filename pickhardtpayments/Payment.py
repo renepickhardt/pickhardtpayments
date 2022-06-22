@@ -1,8 +1,7 @@
-import logging
 import time
 from typing import List
 
-import Attempt
+from .Attempt import Attempt, AttemptStatus
 
 
 class Payment:
@@ -34,7 +33,6 @@ class Payment:
         self._receiver = receiver
         self._total_amount = total_amount
         self._attempts = list()
-        self._start = time.time()
 
     def __str__(self):
         return "Payment with {} attempts to deliver {} sats from {} to {}".format(len(self._attempts),
@@ -102,7 +100,7 @@ class Payment:
         self._end_time = timestamp
 
     @property
-    def attempts(self) -> list[Attempt]:
+    def attempts(self) -> List[Attempt]:
         """Returns all onions that were built and are associated with this Payment.
 
         :return: A list of Attempts of this payment.
@@ -110,7 +108,7 @@ class Payment:
         """
         return self._attempts
 
-    def add_attempts(self, attempts: list[Attempt]):
+    def add_attempts(self, attempts: List[Attempt]):
         """Adds Attempts (onions) that have been made to settle the Payment to the Payment object.
 
         :param attempts: a list of attempts that belong to this Payment
@@ -153,7 +151,7 @@ class Payment:
         """
         return self.fee * 1000 / self.total_amount
 
-    def filter_attempts(self, flag: AttemptStatus) -> list[Attempt]:
+    def filter_attempts(self, flag: AttemptStatus) -> List[Attempt]:
         """Returns all onions with the given state.
 
         :param flag: the state of the attempts that should be filtered for

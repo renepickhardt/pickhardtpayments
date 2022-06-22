@@ -1,3 +1,5 @@
+from typing import List
+
 from .ChannelGraph import ChannelGraph
 from .OracleChannel import OracleChannel
 import networkx as nx

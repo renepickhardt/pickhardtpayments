@@ -192,7 +192,7 @@ class SyncSimulatedPaymentSession:
             except:
                 break
             channel_path, used_flow = self._make_channel_path(G, path)
-            channel_paths.append((channel_path, used_flow))
+            attempts.append(Attempt(channel_path, used_flow))
 
             # reduce the flow from the selected path
             for pos, hop in enumerate(self._next_hop(path)):
@@ -328,7 +328,7 @@ class SyncSimulatedPaymentSession:
             (amt - residual_amt) / (expected_sats_to_deliver + 1)))
         print("planned_fee: {:8.3f} sat".format(total_fees))
         print("paid fees: {:8.3f} sat".format(paid_fees))
-        return residual_amt, paid_fees, len(payments), number_failed_paths
+        return residual_amt, paid_fees, len(payment.attempts), len(failed_attempts)
 
     def forget_information(self):
         """

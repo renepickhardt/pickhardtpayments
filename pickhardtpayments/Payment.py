@@ -160,7 +160,9 @@ class Payment:
         :return: A list of successful Attempts of this Payment, which could be settled.
         :rtype: list[Attempt]
         """
-        return [attempt for attempt in self._attempts if attempt.status.value == flag.value]
+        for attempt in self._attempts:
+            if attempt.status.value == flag.value:
+                yield attempt
 
     @property
     def successful(self) -> bool:

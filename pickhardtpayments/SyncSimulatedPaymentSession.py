@@ -389,9 +389,9 @@ class SyncSimulatedPaymentSession:
         print("========")
         print("Rounds of mcf-computations:\t", cnt)
         print("Number of attempts made:\t", len(payment.attempts))
-        print("Number of failed attempts:\t", len(payment.filter_attempts(AttemptStatus.FAILED)))
+        print("Number of failed attempts:\t", len(list(payment.filter_attempts(AttemptStatus.FAILED))))
         print("Failure rate: {:4.2f}% ".format(
-            len(payment.filter_attempts(AttemptStatus.FAILED)) * 100. / len(payment.attempts)))
+            len(list(payment.filter_attempts(AttemptStatus.FAILED))) * 100. / len(payment.attempts)))
         print("total Payment lifetime (including inefficient memory management): {:4.3f} sec".format(
             payment.end_time - payment.start_time))
         print("Learnt entropy: {:5.2f} bits".format(entropy_start - entropy_end))

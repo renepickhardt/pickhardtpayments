@@ -16,21 +16,21 @@ import pickhardtpayments
 gossip = get_gossip() # whatever resource that provides a list of the channels in LN
 oracle = new_oracle() # a simulation of LN or a direct connection to it
 
-pay_mpp = pickhardtpayments.paymentSession()
+session = pickhardtpayments.paymentSession()
 
 for channel in gossip:
-    pay_mpp.add_channel(channel)
+    session.add_channel(channel)
 
 res_amt = amt
 while res_amt>0:
-    mpp = pay_mpp.optimizedPayment(A,B,res_amt)
+    mpp = session.optimizedPayment(A,B,res_amt)
     
     for path,value in mpp:
         success,bad_channel = oracle.send_onion(path,value)
         
         if success:
             res_amt -= value
-            pay_mpp.updateSuccess(path,value)
+            session.updateSuccess(path,value)
         else:
-            pay_mpp.updateFailure(path,value,bad_channel)
+            session.updateFailure(path,value,bad_channel)
 ```

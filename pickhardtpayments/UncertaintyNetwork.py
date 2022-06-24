@@ -21,7 +21,8 @@ class UncertaintyNetwork(ChannelGraph):
     Paths cannot be probed against the UncertaintyNetwork as it lacks an Oracle
     """
 
-    def __init__(self, channel_graph: ChannelGraph, base_threshold: int = DEFAULT_BASE_THRESHOLD):
+    def __init__(self, channel_graph: ChannelGraph, base_threshold: int = DEFAULT_BASE_THRESHOLD,
+                 prune_network: bool = True):
         self._channel_graph = nx.MultiDiGraph()
         for src, dest, keys, channel in channel_graph.network.edges(data="channel", keys=True):
             oracle_channel = UncertaintyChannel(channel)
@@ -30,10 +31,19 @@ class UncertaintyNetwork(ChannelGraph):
                                              oracle_channel.dest,
                                              key=oracle_channel.short_channel_id,
                                              channel=oracle_channel)
+        self._prune = prune_network
 
     @property
     def network(self):
         return self._channel_graph
+
+    @property
+    def prune(self):
+        return self._prune
+
+    @prune.setter
+    def prune(self, value: bool):
+        self._prune = value
 
     def entropy(self):
         """

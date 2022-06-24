@@ -8,6 +8,7 @@ An example payment is executed and statistics are run.
 import logging
 import sys
 from typing import List
+import traceback
 
 from .Attempt import Attempt, AttemptStatus
 from .Payment import Payment
@@ -23,18 +24,19 @@ DEFAULT_BASE_THRESHOLD = 0
 
 
 def set_logger():
-    # Set Logger
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s.%(msecs)03d | %(levelname)s | %(message)s', datefmt='%H:%M:%S')
+    logger = logging.getLogger()
     stdout_handler = logging.StreamHandler(sys.stdout)
-    stdout_handler.setLevel(logging.DEBUG)
+    stdout_handler.setLevel(logging.INFO)
     stdout_handler.setFormatter(formatter)
-    file_handler = logging.FileHandler('pickhardt_pay.log')
+    file_handler = logging.FileHandler('pickhardt_pay.log', mode='w')
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
     logger.addHandler(stdout_handler)
+    # logger.basicConfig(handlers=[file_handler, stdout_handler])
 
 
 class SyncSimulatedPaymentSession:
@@ -272,42 +274,46 @@ class SyncSimulatedPaymentSession:
         amt = 0
         arrived_attempts = []
         failed_attempts = []
-        print("\nStatistics about {} candidate onions:\n".format(len(payment.attempts)))
-        print("successful attempts:")
-        print("--------------------")
-        for arrived_attempt in payment.filter_attempts(AttemptStatus.ARRIVED):
-            amt += arrived_attempt.amount
-            total_fees += arrived_attempt.routing_fee / 1000.
-            expected_sats_to_deliver += arrived_attempt.probability * arrived_attempt.amount
-            print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
-                arrived_attempt.probability * 100, arrived_attempt.amount, len(arrived_attempt.path),
-                int(arrived_attempt.routing_fee * 1000 / arrived_attempt.amount)))
-            paid_fees += arrived_attempt.routing_fee
+        logging.debug("Statistics about {} candidate onion(s):".format(len(payment.attempts)))
 
-        print("\nfailed attempts:")
-        print("----------------")
-        for failed_attempt in payment.filter_attempts(AttemptStatus.FAILED):
-            amt += failed_attempt.amount
-            total_fees += failed_attempt.routing_fee / 1000.
-            expected_sats_to_deliver += failed_attempt.probability * failed_attempt.amount
-            print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
-                failed_attempt.probability * 100, failed_attempt.amount, len(failed_attempt.path),
-                int(failed_attempt.routing_fee * 1000 / failed_attempt.amount)))
-            residual_amt += failed_attempt.amount
+        if len(list(payment.filter_attempts(AttemptStatus.ARRIVED))) > 0:
+            logging.debug("successful attempts:")
+            logging.debug("--------------------")
+            for arrived_attempt in payment.filter_attempts(AttemptStatus.ARRIVED):
+                amt += arrived_attempt.amount
+                total_fees += arrived_attempt.routing_fee / 1000.
+                expected_sats_to_deliver += arrived_attempt.probability * arrived_attempt.amount
+                logging.debug(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
+                    arrived_attempt.probability * 100, arrived_attempt.amount, len(arrived_attempt.path),
+                    int(arrived_attempt.routing_fee * 1000 / arrived_attempt.amount)))
+                paid_fees += arrived_attempt.routing_fee
+        if len(list(payment.filter_attempts(AttemptStatus.FAILED))) > 0:
+            logging.debug("failed attempts:")
+            logging.debug("--------------------")
+            for failed_attempt in payment.filter_attempts(AttemptStatus.FAILED):
+                amt += failed_attempt.amount
+                total_fees += failed_attempt.routing_fee / 1000.
+                expected_sats_to_deliver += failed_attempt.probability * failed_attempt.amount
+                logging.debug(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
+                    failed_attempt.probability * 100, failed_attempt.amount, len(failed_attempt.path),
+                    int(failed_attempt.routing_fee * 1000 / failed_attempt.amount)))
+                residual_amt += failed_attempt.amount
 
-        print("\nAttempt Summary:")
-        print("=================")
-        print("\nTried to deliver \t{:10} sats".format(amt))
-        fraction = expected_sats_to_deliver * 100. / amt
-        print("expected to deliver {:10} sats \t({:4.2f}%)".format(
-            int(expected_sats_to_deliver), fraction))
-        fraction = (amt - residual_amt) * 100. / (amt)
-        print("actually delivered {:10} sats \t({:4.2f}%)".format(
-            amt - residual_amt, fraction))
-        print("deviation: \t\t{:4.2f}".format(
+        logging.debug("Attempt Summary:")
+        logging.debug("=================")
+        logging.debug("Tried to deliver \t{:10} sats".format(amt))
+        if amt != 0:
+
+            fraction = expected_sats_to_deliver * 100. / amt
+            logging.debug("expected to deliver {:10} sats \t({:4.2f}%)".format(
+                int(expected_sats_to_deliver), fraction))
+            fraction = (amt - residual_amt) * 100. / (amt)
+            logging.debug("actually delivered {:10} sats \t({:4.2f}%)".format(
+                amt - residual_amt, fraction))
+        logging.debug("deviation: \t\t{:4.2f}".format(
             (amt - residual_amt) / (expected_sats_to_deliver + 1)))
-        print("planned_fee: {:8.3f} sat".format(total_fees))
-        print("paid fees: {:8.3f} sat".format(paid_fees))
+        logging.debug("planned_fee: {:8.3f} sat".format(total_fees))
+        logging.debug("paid fees: {:8.3f} sat".format(paid_fees))
         return residual_amt, paid_fees, len(payment.attempts), len(failed_attempts)
 
     def forget_information(self):
@@ -349,8 +355,8 @@ class SyncSimulatedPaymentSession:
         # a better stop criteria would be if we compute infeasible flows or if the probabilities
         # are too low or residual amounts decrease to slowly
         while amt > 0 and cnt < 10:
-            print("Round number: ", cnt + 1)
-            print("Try to deliver", amt, "satoshi:")
+            logging.debug(f"Starting round number {cnt + 1}")
+            logging.debug(f"Try to deliver {amt} satoshi:")
 
             sub_payment = Payment(payment.sender, payment.receiver, amt)
             # transfer to a min cost flow problem and run the solver
@@ -366,8 +372,7 @@ class SyncSimulatedPaymentSession:
             amt, paid_fees, num_paths, number_failed_paths = self._evaluate_attempts(
                 sub_payment)
 
-            print("Runtime of flow computation: {:4.2f} sec ".format(runtime))
-            print("\n================================================================\n")
+            logging.debug("Runtime of flow computation: {:4.2f} sec".format(runtime))
 
             total_number_failed_paths += number_failed_paths
             total_fees += paid_fees
@@ -389,16 +394,17 @@ class SyncSimulatedPaymentSession:
         payment.end_time = time.time()
 
         entropy_end = self._uncertainty_network.entropy()
-        print("SUMMARY:")
-        print("========")
-        print("Rounds of mcf-computations:\t", cnt)
-        print("Number of attempts made:\t", len(payment.attempts))
-        print("Number of failed attempts:\t", len(list(payment.filter_attempts(AttemptStatus.FAILED))))
-        print("Failure rate: {:4.2f}% ".format(
+        logging.info("SUMMARY:")
+        logging.info("========")
+        logging.info("Rounds of mcf-computations:\t%s", cnt)
+        logging.info("Number of attempts made:\t%s", len(payment.attempts))
+        logging.info("Number of failed attempts:\t%s", len(list(payment.filter_attempts(AttemptStatus.FAILED))))
+        logging.info("Failure rate: {:4.2f}% ".format(
             len(list(payment.filter_attempts(AttemptStatus.FAILED))) * 100. / len(payment.attempts)))
-        print("total Payment lifetime (including inefficient memory management): {:4.3f} sec".format(
+        logging.info("total Payment lifetime (including inefficient memory management): {:4.3f} sec".format(
             payment.end_time - payment.start_time))
-        print("Learnt entropy: {:5.2f} bits".format(entropy_start - entropy_end))
-        print("fee for settlement of delivery: {:8.3f} sat --> {} ppm".format(
+        logging.info("Learnt entropy: {:5.2f} bits".format(entropy_start - entropy_end))
+        logging.info("fee for settlement of delivery: {:8.3f} sat --> {} ppm".format(
             payment.settlement_fees/1000, int(payment.settlement_fees * 1000 / payment.total_amount)))
-        print("used mu:", mu)
+        logging.info("used mu: %s", mu)
+        logging.info("Payment was successful: %s", payment.successful)

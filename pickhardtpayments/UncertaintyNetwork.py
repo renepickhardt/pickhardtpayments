@@ -41,6 +41,7 @@ class UncertaintyNetwork(ChannelGraph):
         """
         return sum(channel.entropy() for src, dest, channel in self.network.edges(data="channel"))
 
+
     def allocate_amount_on_path(self, path: List[UncertaintyChannel], amt: int):
         """
         allocates `amt` to all channels of the path of `UncertaintyChannels`

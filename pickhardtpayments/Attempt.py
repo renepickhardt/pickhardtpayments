@@ -57,6 +57,7 @@ class Attempt:
             # When Attempt is created, all amounts are set inflight. Needs to be updated with AttemptStatus change!
             # This is to correctly compute conditional probabilities of non-disjoint paths in the same set of paths
             # channel.in_flight(amount)
+            # Fixme: balance allocated more than once?
             channel.allocate_amount(amount)
         self._status = AttemptStatus.PLANNED
 

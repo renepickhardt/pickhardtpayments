@@ -8,6 +8,26 @@ from .UncertaintyNetwork import UncertaintyNetwork
 from .OracleLightningNetwork import OracleLightningNetwork
 from .Attempt import Attempt, AttemptStatus
 
+import logging
+import sys
+
+# logger = logging.getLogger(__name__)
+logger = logging.getLogger()
+# formatter = logging.Formatter('%(asctime)s.%(msecs)03d | %(levelname)s | %(message)s', datefmt='%H:%M:%S')
+stdout_handler = logging.StreamHandler(sys.stdout)
+stdout_handler.setLevel(logging.INFO)
+# stdout_handler.setFormatter(formatter)
+file_handler = logging.FileHandler('pickhardt_pay.log', mode='a')
+file_handler.setLevel(logging.DEBUG)
+# file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+# logger.addHandler(stdout_handler)
+
+
+class MCFSolverError(Exception):
+    """Throws errors when the Min Cost Flow Solver does not return an appropriate result"""
+    pass
+
 
 class Payment:
     """
@@ -27,7 +47,7 @@ class Payment:
     """
 
     def __init__(self, uncertainty_network: UncertaintyNetwork, oracle_network: OracleLightningNetwork, sender,
-                 receiver, total_amount: int = 1):
+                 receiver, total_amount: int, mu: int, base: int):
         """Constructor method
         """
         self._successful = False
@@ -42,6 +62,10 @@ class Payment:
         self._uncertainty_network = uncertainty_network
         self._oracle_network = oracle_network
         self._prepare_integer_indices_for_nodes()
+        self._mu = mu
+        self._base = base
+        self._pickhardt_payment_rounds = 0
+        self._uncertainty_network_entropy = self._uncertainty_network.entropy()
 
     def __str__(self):
         return "Payment with {} attempts to deliver {} sats from {} to {}".format(len(self._attempts),
@@ -77,36 +101,17 @@ class Payment:
         return self._total_amount
 
     @property
-    def start_time(self) -> float:
-        """Returns the time when Payment object was instantiated.
+    def life_time(self) -> float:
+        """Time period from when payment was created until the paymentfinished, either by being aborted or by
+        successful settlement
 
-        :return: time in seconds from epoch to instantiation of Payment object.
+        :return: time in seconds from creation of the payment to successful payment or failure of payment.
         :rtype: float
         """
-        return self._start_time
-
-    @property
-    def end_time(self) -> float:
-        """Time when payment was finished, either by being aborted or by successful settlement
-
-        Returns the time when all Attempts in Payment did settle or fail.
-
-        :return: time in seconds from epoch to successful payment or failure of payment.
-        :rtype: float
-        """
-        return self._end_time
-
-    @end_time.setter
-    def end_time(self, timestamp):
-        """Set time when payment was finished, either by being aborted or by successful settlement
-
-        Sets end_time time in seconds from epoch. Should be called when the Payment failed or when Payment
-        settled successfully.
-
-        :param timestamp: time in seconds from epoch
-        :type timestamp: float
-        """
-        self._end_time = timestamp
+        if self._end_time and self._start_time:
+            return self._end_time - self._start_time
+        else:
+            return time.time() - self._start_time
 
     @property
     def attempts(self) -> List[Attempt]:
@@ -160,6 +165,30 @@ class Payment:
         """
         return self._fee * 1000 / self.total_amount
 
+    @property
+    def pickhardt_payment_rounds(self) -> int:
+        """Returns the number of rounds needed for this payment.
+
+        :return: The number of rounds needed for this payment.
+        :rtype: int
+        """
+        return self._pickhardt_payment_rounds
+    
+    @property
+    def uncertainty_network_entropy_delta(self) -> int:
+        """Returns the number of rounds needed for this payment.
+
+        :return: The number of rounds needed for this payment.
+        :rtype: int
+        """
+        return self._uncertainty_network_entropy - self._uncertainty_network.entropy()
+
+    def increment_pickhardt_payment_rounds(self):
+        """Increments the number of rounds needed for this payment by 1.
+
+        """
+        self._pickhardt_payment_rounds += 1
+
     def filter_attempts(self, flag: AttemptStatus) -> List[Attempt]:
         """Returns all onions with the given state.
 
@@ -191,6 +220,12 @@ class Payment:
         """
         self._successful = value
 
+    def initiate(self) -> int:
+        logger.debug("")
+        logger.info(f"Trying to deliver {self._total_amount} satoshi:")
+        self._generate_candidate_paths()
+        return 0
+
     def _prepare_integer_indices_for_nodes(self):
         """
         necessary for the OR-lib by google and the min cost flow solver
@@ -204,7 +239,7 @@ class Payment:
             self._mcf_id[node_id] = k
             self._node_key[k] = node_id
 
-    def generate_candidate_paths(self, mu: int, base: int):
+    def _generate_candidate_paths(self):
         """
         computes the optimal payment split to deliver `amt` from `src` to `dest` and updates our belief about the
         liquidity
@@ -216,24 +251,34 @@ class Payment:
 
         the function also prints some results on statistics about the paths of the flow to stdout.
         """
-        # initialisation of List of Attempts for this round.
-        attempts_in_round = List[Attempt]
-
         # First we prepare the min cost flow by getting arcs from the uncertainty network
-        self._prepare_mcf_solver(mu, base)
+        self._prepare_mcf_solver(self._mu, self._base)
         self._start_time = time.time()
-        # print("solving mcf...")
+        logger.debug("solving mcf...")
         status = self._min_cost_flow.Solve()
 
+        status_description = {
+            0: "NOT_SOLVED",
+            1: "OPTIMAL",
+            2: "FEASIBLE",
+            3: "INFEASIBLE",
+            4: "UNBALANCED",
+            5: "BAD_RESULT",
+            6: "BAD_COST_RANGE"
+        }
         if status != self._min_cost_flow.OPTIMAL:
+            logger.debug('Error trying to deliver %s sats from %s to %s.', self._total_amount,
+                         self._sender, self._receiver)
             print('There was an issue with the min cost flow input.')
             print(f'Status: {status}')
-            exit(1)
+            raise MCFSolverError(f'MinCostFlowBase returns {status_description[status]} '
+                                 f'(in Payment._generate_candidate_paths(), '
+                                 f'_min_cost_flow.Solve().)')
 
         attempts_in_round = self._dissect_flow_to_paths(self._sender, self._receiver)
         self._end_time = time.time()
         self.add_attempts(attempts_in_round)
-        return 0
+        return self._end_time - self._start_time
 
     def _prepare_mcf_solver(self, mu: int, base_fee: int):
         """
@@ -307,10 +352,9 @@ class Payment:
 
         return channel_path, bottleneck
 
-    def _dissect_flow_to_paths(self, s, d):
+    def _dissect_flow_to_paths(self, s, d) -> List[Attempt]:
         """
         A standard algorithm to dissect a flow into several paths.
-
 
         FIXME: Note that this dissection while accurate is probably not optimal in practice.
         As noted in our Probabilistic payment delivery paper the payment process is a bernoulli trial
@@ -324,7 +368,7 @@ class Payment:
             flow = self._min_cost_flow.Flow(i)  # *QUANTIZATION
             if flow == 0:
                 continue
-
+            # Fixme: fix balance management in uncertainty network
             src, dest, channel, _ = self._arc_to_channel[i]
             if G.has_edge(src, dest):
                 if channel.short_channel_id in G[src][dest]:
@@ -339,6 +383,7 @@ class Payment:
 
         # allocate flow to shortest / cheapest paths from src to dest as long as this is possible
         # decrease flow along those edges. This is a standard mechanism to dissect a flow into paths
+
         while used_flow > 0:
             try:
                 path = nx.shortest_path(G, s, d)
@@ -346,7 +391,7 @@ class Payment:
                 break
             channel_path, used_flow = self._make_channel_path(G, path)
             attempts.append(Attempt(channel_path, used_flow))
-
+            logger.error("used flow %s", used_flow)
             # reduce the flow from the selected path
             for pos, hop in enumerate(self._next_hop(path)):
                 src, dest = hop
@@ -366,3 +411,123 @@ class Payment:
             src = path[i - 1]
             dest = path[i]
             yield src, dest
+
+    def attempt_payments(self) -> int:
+        """
+        We attempt all planned payments and test the success against the oracle in particular this
+        method changes - depending on the outcome of each payment - our belief about the uncertainty
+        in the UncertaintyNetwork.
+        successful onions are collected to be transacted on the OracleNetwork if complete payment can be delivered
+
+        For each path the Attempt is registered as planned and the amount is registered in the uncertainty network as
+        in_flight (better name can be determined) On the Attempts send_onion() is called to test the Attempt against
+        the OracleNetwork. Every failed attempt from send_onion is then updated as AttemptStatus.FAILED and the
+        in_flight amounts are removed from the UncertaintyNetwork. For every successful call of send_onion() the amount
+        is registered in the OracleNetwork as in_flight and the AttemptStatus is set to INFLIGHT. The amounts have
+        been allocated in the UncertaintyNetwork already, so no change is necessary here.
+
+        If onions failed, the next round is started for the remaining amount in the PaymentSession.
+
+        """
+        # test planned payment attempts in this Payment
+        for attempt in self._attempts:
+            success, erring_channel = self._oracle_network.send_onion(
+                attempt.path, attempt.amount)
+            if success:
+                # TODO: this can probably go, if amounts were allocated already?
+                attempt.status = AttemptStatus.INFLIGHT
+                # add amounts to UncertaintyNetwork, so that they are taken into account when probabilities
+                # are calculated for the next run
+                self._uncertainty_network.allocate_amount_on_path(
+                    attempt.path, attempt.amount)
+                # add amounts to OracleNetwork, replicate HTLCs on the Channels
+                # TODO: Add HTLCs to OracleNetwork
+
+            else:
+                attempt.status = AttemptStatus.FAILED
+                # TODO: clean up amounts on networks
+        return 0
+
+    def evaluate_attempts(self) -> tuple[int, int, int, int]:
+        """
+        helper function to collect statistics about attempts and print them
+
+        returns the `residual` amount that could not have been delivered and some statistics
+        """
+        total_fees = 0
+        paid_fees = 0
+        residual_amt = 0
+        expected_sats_to_deliver = 0
+        amt = 0
+        logger.debug("Statistics about {} candidate onion(s):".format(len(self.attempts)))
+
+        if len(list(self.filter_attempts(AttemptStatus.INFLIGHT))) > 0:
+            logger.debug("successful attempts (in_flight:")
+            logger.debug("-------------------------------")
+            for inflight_attempt in self.filter_attempts(AttemptStatus.INFLIGHT):
+                amt += inflight_attempt.amount
+                total_fees += inflight_attempt.routing_fee / 1000.
+                expected_sats_to_deliver += inflight_attempt.probability * inflight_attempt.amount
+                logger.debug(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
+                    inflight_attempt.probability * 100, inflight_attempt.amount, len(inflight_attempt.path),
+                    int(inflight_attempt.routing_fee * 1000 / inflight_attempt.amount)))
+                paid_fees += inflight_attempt.routing_fee
+        if len(list(self.filter_attempts(AttemptStatus.FAILED))) > 0:
+            logger.debug("failed attempts:")
+            logger.debug("----------------")
+            for failed_attempt in self.filter_attempts(AttemptStatus.FAILED):
+                amt += failed_attempt.amount
+                total_fees += failed_attempt.routing_fee / 1000.
+                expected_sats_to_deliver += failed_attempt.probability * failed_attempt.amount
+                logger.debug(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
+                    failed_attempt.probability * 100, failed_attempt.amount, len(failed_attempt.path),
+                    int(failed_attempt.routing_fee * 1000 / failed_attempt.amount)))
+                residual_amt += failed_attempt.amount
+
+        logger.debug("Attempt Summary:")
+        logger.debug("________________")
+        logger.debug("Tried to deliver \t{:10} sats".format(amt))
+        if amt != 0:
+            fraction = expected_sats_to_deliver * 100. / amt
+            logger.debug("expected to deliver \t{:10} sats \t({:4.2f}%)".format(
+                int(expected_sats_to_deliver), fraction))
+            fraction = (amt - residual_amt) * 100. / (amt)
+            logger.debug("actually delivered \t{:10} sats \t({:4.2f}%)".format(
+                amt - residual_amt, fraction))
+        logger.debug("deviation: \t\t{:4.2f}".format(
+            (amt - residual_amt) / (expected_sats_to_deliver + 1)))
+        logger.debug("planned_fee: {:8.3f} sat".format(total_fees))
+        logger.debug("paid fees: {:8.3f} sat".format(paid_fees))
+
+        logger.debug("Runtime of flow computation: {:4.2f} sec".format(self._end_time - self._start_time))
+
+        return residual_amt, paid_fees, len(self.attempts), len(list(self.filter_attempts(AttemptStatus.FAILED)))
+
+    def execute(self) -> int:
+        for attempt in self.filter_attempts(AttemptStatus.INFLIGHT):
+            try:
+                self._oracle_network.settle_payment(attempt.path, attempt.amount)
+                attempt.status = AttemptStatus.SETTLED
+            except Exception as e:
+                self._end_time = time.time()
+                print(e)
+                return -1
+        self.successful = True
+        self._end_time = time.time()
+        return 0
+
+    def get_summary(self):
+        logger.info("SUMMARY:")
+        logger.info("========")
+        logger.info("Rounds of mcf-computations:\t{:3}".format(self.pickhardt_payment_rounds))
+        logger.info("Number of attempts made:\t\t{:3}".format(len(self.attempts)))
+        logger.info("Number of failed attempts:\t{:3}".format(len(list(self.filter_attempts(AttemptStatus.FAILED)))))
+        logger.info("Failure rate: {:4.2f}% ".format(
+            len(list(self.filter_attempts(AttemptStatus.FAILED))) * 100. / len(self.attempts)))
+        logger.info("total Payment lifetime (including inefficient memory management): {:4.3f} sec".format(
+            self.life_time))
+        logger.info("Learnt entropy: {:5.2f} bits".format(self.uncertainty_network_entropy_delta))
+        logger.info("fee for settlement of delivery: {:8.3f} sat --> {} ppm".format(
+            self.settlement_fees / 1000, int(self.settlement_fees * 1000 / self.total_amount)))
+        logger.info("used mu: %s", self._mu)
+        logger.info("Payment was successful: %s", self.successful)

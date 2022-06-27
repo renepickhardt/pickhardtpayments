@@ -1,7 +1,7 @@
+from Attempt import Attempt
 from .ChannelGraph import ChannelGraph
 from .UncertaintyChannel import UncertaintyChannel
 from .OracleLightningNetwork import OracleLightningNetwork
-
 
 from typing import List
 import networkx as nx
@@ -51,13 +51,12 @@ class UncertaintyNetwork(ChannelGraph):
         """
         return sum(channel.entropy() for src, dest, channel in self.network.edges(data="channel"))
 
-
-    def allocate_amount_on_path(self, path: List[UncertaintyChannel], amt: int):
+    def allocate_amount_on_path(self, attempt: Attempt):
         """
         allocates `amt` to all channels of the path of `UncertaintyChannels`
         """
-        for channel in path:
-            channel.allocate_amount(amt)
+        for channel in attempt.path:
+            channel.allocate_amount(attempt.amount)
 
     def reset_uncertainty_network(self):
         """
@@ -111,15 +110,15 @@ class UncertaintyNetwork(ChannelGraph):
             key = "{}x{}".format(vals[0], vals[1])
             if key in ego_network:
                 l = arc.get_actual_liquidity()
-                arc.update_knowledge(l-1)
-                arc.update_knowledge(l+1)
+                arc.update_knowledge(l - 1)
+                arc.update_knowledge(l + 1)
                 # print(key,arc.entropy())
 
             if key in foaf_network:
                 arc.learn_n_bits(2)
                 l = arc.get_actual_liquidity()
-                arc.update_knowledge(l-1)
-                arc.update_knowledge(l+1)
+                arc.update_knowledge(l - 1)
+                arc.update_knowledge(l + 1)
                 # print(key, arc.entropy())
         print("channels with full knowledge: ", len(ego_network))
         print("channels with 2 Bits of less entropy: ", len(foaf_network))

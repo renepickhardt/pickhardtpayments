@@ -26,7 +26,6 @@ file_handler.setFormatter(formatter)
 session_logger.addHandler(file_handler)
 session_logger.addHandler(stdout_handler)
 
-
 DEFAULT_BASE_THRESHOLD = 0
 
 
@@ -96,11 +95,7 @@ class SyncSimulatedPaymentSession:
 
         """
         session_logger.info('*** new pickhardt payment ***')
-
-        # Setup
-        cnt = 0
-        total_fees = 0
-        total_number_failed_paths = 0
+        self.forget_information()
 
         # Initialise Payment
         payment = Payment(self.uncertainty_network, self.oracle_network, src, dest, amt, mu, base)
@@ -109,30 +104,26 @@ class SyncSimulatedPaymentSession:
         # implemented in a concurrent way. Also, we stop after 10 rounds which is pretty arbitrary
         # a better stop criteria would be if we compute infeasible flows or if the probabilities
         # are too low or residual amounts decrease to slowly
-        while amt > 0 and cnt < 10:
+        # TODO add 'expected value' to break condition for loop
+        while payment.residual_amount > 0 and payment.pickhardt_payment_rounds <= 10:
             sub_payment = Payment(self.uncertainty_network, self.oracle_network, payment.sender, payment.receiver,
-                                  amt, mu, base)
+                                  payment.residual_amount, mu, base)
 
-            # transfer to a min cost flow problem and run the solver
+            # transfer to a min cost flow problem and run the solver. Attempts for payment are generated.
             sub_payment.initiate()
 
-            # make attempts, try to send onion and register if success or not
+            # Try to send amounts in attempts and registers if success or not
             # update our information in the UncertaintyNetwork and OracleNetwork
             sub_payment.attempt_payments()
 
             # run some simple statistics and depict them
-            amt, paid_fees, num_paths, number_failed_paths = sub_payment.evaluate_attempts()
-
-            total_number_failed_paths += number_failed_paths
-            total_fees += paid_fees
-            cnt += 1
+            sub_payment.evaluate_attempts(payment)
 
             # add attempts of sub_payment to payment
-            payment.add_attempts(sub_payment.attempts)
-            payment.increment_pickhardt_payment_rounds()
+            payment.register_sub_payment(sub_payment)
 
         # When residual amount is 0 then settle payment.
-        if amt == 0:
+        if payment.residual_amount == 0:
             payment.execute()
 
         # Final Stats

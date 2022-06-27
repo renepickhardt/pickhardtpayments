@@ -52,12 +52,12 @@ class Payment:
         """
         self._successful = False
         self._ppm = None
-        self._fee = None
         self._start_time = time.time()
         self._end_time = None
         self._sender = sender
         self._receiver = receiver
         self._total_amount = total_amount
+        self._residual_amount = total_amount
         self._attempts = list()
         self._uncertainty_network = uncertainty_network
         self._oracle_network = oracle_network
@@ -101,6 +101,16 @@ class Payment:
         return self._total_amount
 
     @property
+    def residual_amount(self) -> int:
+        """Returns the amount that still needs to be allocated. The total amount of the payment consists of the amounts
+        that could be allocated to paths and would successfully be sent in the attempts, and the residual amount.
+
+        :return: The residual amount of sats that needs to be allocated for the payment to deliver the complete amount.
+        :rtype: int
+        """
+        return self._residual_amount
+
+    @property
     def life_time(self) -> float:
         """Time period from when payment was created until the paymentfinished, either by being aborted or by
         successful settlement
@@ -122,13 +132,16 @@ class Payment:
         """
         return self._attempts
 
-    def add_attempts(self, attempts: List[Attempt]):
+    def register_sub_payment(self, sub_payment):
         """Adds Attempts (onions) that have been made to settle the Payment to the Payment object.
 
-        :param attempts: a list of attempts that belong to this Payment
+        :param sub_payment: a list of attempts that belong to this Payment
         :type: list[Attempt]
         """
-        self._attempts.extend(attempts)
+        self._attempts.extend(sub_payment.attempts)
+        self._residual_amount = sub_payment.residual_amount
+        self.increment_pickhardt_payment_rounds()
+        logger.debug("remaining amount: %s", self.residual_amount)
 
     @property
     def settlement_fees(self) -> float:
@@ -142,8 +155,7 @@ class Payment:
             settlement_fees += attempt.routing_fee
         return settlement_fees
 
-    @property
-    def arrived_fees(self) -> float:
+    def filter_fees(self, flag: AttemptStatus) -> float:
         """Returns the fees for all Attempts/onions for this payment, that arrived but have not yet been settled.
 
         It's the sum of the routing fees of all arrived attempts.
@@ -151,10 +163,24 @@ class Payment:
         :return: fee in sats for arrived attempts of Payment
         :rtype: float
         """
-        planned_fees = 0
-        for attempt in self.filter_attempts(AttemptStatus.ARRIVED):
-            planned_fees += attempt.routing_fee
-        return planned_fees
+        fees = 0
+        for attempt in self.filter_attempts(flag):
+            fees += attempt.routing_fee
+        return fees
+
+    @property
+    def total_fees(self) -> float:
+        """Returns the fees for all Attempts/onions for this payment.
+
+        It's the sum of the routing fees of all attempts.
+
+        :return: fee in sats for all attempts of Payment
+        :rtype: float
+        """
+        total_fees = 0
+        for attempt in self.attempts:
+            total_fees += attempt.routing_fee
+        return total_fees
 
     @property
     def ppm(self) -> float:
@@ -163,7 +189,7 @@ class Payment:
         :return: fee in ppm for successful delivery and settlement of payment
         :rtype: float
         """
-        return self._fee * 1000 / self.total_amount
+        return self.settlement_fees * 1000 / self.total_amount
 
     @property
     def pickhardt_payment_rounds(self) -> int:
@@ -222,7 +248,7 @@ class Payment:
 
     def initiate(self) -> int:
         logger.debug("")
-        logger.info(f"Trying to deliver {self._total_amount} satoshi:")
+        logger.debug(f"Trying to deliver {self._total_amount} satoshi:")
         self._generate_candidate_paths()
         return 0
 
@@ -275,10 +301,13 @@ class Payment:
                                  f'(in Payment._generate_candidate_paths(), '
                                  f'_min_cost_flow.Solve().)')
 
-        attempts_in_round = self._dissect_flow_to_paths(self._sender, self._receiver)
+        candidate_paths_in_round = self._dissect_flow_to_paths(self._sender, self._receiver)
         self._end_time = time.time()
-        self.add_attempts(attempts_in_round)
+        self.register_candidate_paths(candidate_paths_in_round)
         return self._end_time - self._start_time
+
+    def register_candidate_paths(self, candidate_paths):
+        self._attempts.extend(candidate_paths)
 
     def _prepare_mcf_solver(self, mu: int, base_fee: int):
         """
@@ -391,7 +420,7 @@ class Payment:
                 break
             channel_path, used_flow = self._make_channel_path(G, path)
             attempts.append(Attempt(channel_path, used_flow))
-            logger.error("used flow %s", used_flow)
+            logger.debug("used flow %s", used_flow)
             # reduce the flow from the selected path
             for pos, hop in enumerate(self._next_hop(path)):
                 src, dest = hop
@@ -438,54 +467,49 @@ class Payment:
                 attempt.status = AttemptStatus.INFLIGHT
                 # add amounts to UncertaintyNetwork, so that they are taken into account when probabilities
                 # are calculated for the next run
-                self._uncertainty_network.allocate_amount_on_path(
-                    attempt.path, attempt.amount)
+                self._uncertainty_network.allocate_amount_on_path(attempt)
                 # add amounts to OracleNetwork, replicate HTLCs on the Channels
                 # TODO: Add HTLCs to OracleNetwork
-
+                self._residual_amount -= attempt.amount
             else:
                 attempt.status = AttemptStatus.FAILED
                 # TODO: clean up amounts on networks
         return 0
 
-    def evaluate_attempts(self) -> tuple[int, int, int, int]:
+    def evaluate_attempts(self, payment):
         """
         helper function to collect statistics about attempts and print them
 
-        returns the `residual` amount that could not have been delivered and some statistics
         """
-        total_fees = 0
-        paid_fees = 0
+
         residual_amt = 0
         expected_sats_to_deliver = 0
         amt = 0
         logger.debug("Statistics about {} candidate onion(s):".format(len(self.attempts)))
 
-        if len(list(self.filter_attempts(AttemptStatus.INFLIGHT))) > 0:
-            logger.debug("successful attempts (in_flight:")
-            logger.debug("-------------------------------")
-            for inflight_attempt in self.filter_attempts(AttemptStatus.INFLIGHT):
-                amt += inflight_attempt.amount
-                total_fees += inflight_attempt.routing_fee / 1000.
-                expected_sats_to_deliver += inflight_attempt.probability * inflight_attempt.amount
-                logger.debug(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
-                    inflight_attempt.probability * 100, inflight_attempt.amount, len(inflight_attempt.path),
-                    int(inflight_attempt.routing_fee * 1000 / inflight_attempt.amount)))
-                paid_fees += inflight_attempt.routing_fee
-        if len(list(self.filter_attempts(AttemptStatus.FAILED))) > 0:
-            logger.debug("failed attempts:")
-            logger.debug("----------------")
-            for failed_attempt in self.filter_attempts(AttemptStatus.FAILED):
-                amt += failed_attempt.amount
-                total_fees += failed_attempt.routing_fee / 1000.
-                expected_sats_to_deliver += failed_attempt.probability * failed_attempt.amount
-                logger.debug(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
-                    failed_attempt.probability * 100, failed_attempt.amount, len(failed_attempt.path),
-                    int(failed_attempt.routing_fee * 1000 / failed_attempt.amount)))
-                residual_amt += failed_attempt.amount
+        for i, inflight_attempt in enumerate(self.filter_attempts(AttemptStatus.INFLIGHT)):
+            if i == 0:
+                logger.debug("successful attempts (in_flight):")
+                logger.debug("--------------------------------")
+            amt += inflight_attempt.amount
+            expected_sats_to_deliver += inflight_attempt.probability * inflight_attempt.amount
+            logger.debug(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
+                inflight_attempt.probability * 100, inflight_attempt.amount, len(inflight_attempt.path),
+                int(inflight_attempt.routing_fee * 1000 / inflight_attempt.amount)))
+
+        for i, failed_attempt in enumerate(self.filter_attempts(AttemptStatus.FAILED)):
+            if i == 0:
+                logger.debug("failed attempts:")
+                logger.debug("----------------")
+            amt += failed_attempt.amount
+            expected_sats_to_deliver += failed_attempt.probability * failed_attempt.amount
+            logger.debug(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
+                failed_attempt.probability * 100, failed_attempt.amount, len(failed_attempt.path),
+                int(failed_attempt.routing_fee * 1000 / failed_attempt.amount)))
+            residual_amt += failed_attempt.amount  # TODO refactor residual amount
 
         logger.debug("Attempt Summary:")
-        logger.debug("________________")
+        logger.debug("================")
         logger.debug("Tried to deliver \t{:10} sats".format(amt))
         if amt != 0:
             fraction = expected_sats_to_deliver * 100. / amt
@@ -496,24 +520,30 @@ class Payment:
                 amt - residual_amt, fraction))
         logger.debug("deviation: \t\t{:4.2f}".format(
             (amt - residual_amt) / (expected_sats_to_deliver + 1)))
-        logger.debug("planned_fee: {:8.3f} sat".format(total_fees))
-        logger.debug("paid fees: {:8.3f} sat".format(paid_fees))
+        logger.debug("planned fee: \t\t{:8.0f} sat".format(self.total_fees / 1000))
+        logger.debug("fees for in_flights:\t{:8.0f} sat".format(self.filter_fees(AttemptStatus.INFLIGHT) / 1000))
 
         logger.debug("Runtime of flow computation: {:4.2f} sec".format(self._end_time - self._start_time))
 
-        return residual_amt, paid_fees, len(self.attempts), len(list(self.filter_attempts(AttemptStatus.FAILED)))
+        return len(self.attempts), len(list(self.filter_attempts(AttemptStatus.FAILED)))
 
     def execute(self) -> int:
+        logger.debug("Executing Payment...")
+        # FIXME currently does not manage to settle
         for attempt in self.filter_attempts(AttemptStatus.INFLIGHT):
+            logger.debug("iterating over attempts...")
             try:
                 self._oracle_network.settle_payment(attempt.path, attempt.amount)
                 attempt.status = AttemptStatus.SETTLED
+                self.settlement_fees += attempt.routing_fee
             except Exception as e:
+                logger.error("An error occurred when executing payment!")
                 self._end_time = time.time()
                 print(e)
                 return -1
         self.successful = True
         self._end_time = time.time()
+        logging.info("payment executed!")
         return 0
 
     def get_summary(self):
@@ -531,3 +561,5 @@ class Payment:
             self.settlement_fees / 1000, int(self.settlement_fees * 1000 / self.total_amount)))
         logger.info("used mu: %s", self._mu)
         logger.info("Payment was successful: %s", self.successful)
+
+

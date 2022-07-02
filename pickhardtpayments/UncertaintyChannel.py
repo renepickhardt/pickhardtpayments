@@ -271,7 +271,6 @@ class UncertaintyChannel(Channel):
         In mainnet Lightning our oracle will not work on a per_channel level. This will change the data
         flow. Here for simplicity of the simulation we make use of the Oracle on a per channel level
         """
-        logging.debug(f"updating knowledge in UncertaintyChannel {self.src}{self.dest}")
         if probing_successful:
             # self.min_liquidity = max(self.min_liquidity, self.in_flight+amt)
             self.min_liquidity = max(self.min_liquidity, amt)

@@ -1,4 +1,3 @@
-import logging
 from enum import Enum
 from Channel import Channel
 from pickhardtpayments import UncertaintyChannel
@@ -61,7 +60,7 @@ class Attempt:
         self._status = AttemptStatus.PLANNED
 
     def __str__(self):
-        description = "Path with {} channels to deliver {} sats and status {}.".format(len(self._path),
+        description = "Attempt with {} channels to deliver {} sats and status {}.".format(len(self._path),
                                                                                        self._amount, self._status.name)
         if self._routing_fee and self._routing_fee > 0:
             description += "\nsuccess probability of {:6.2f}% , fee of {:8.3f} sat and a ppm of {:5} ".format(
@@ -105,15 +104,12 @@ class Attempt:
         :type value: AttemptStatus
         """
         if not self._status == value:
-            logging.info(f"setting AttemptStatus from {self._status} to {value}")
             if self._status == AttemptStatus.PLANNED and value == AttemptStatus.INFLIGHT:
-                for channel in self._path:
-                    logging.debug(
-                        f"uncertainty channel {channel.src}-{channel.dest} inflight:\t{channel.in_flight}.\t"
-                        f"Liquidity: min {channel.min_liquidity}, max {channel.max_liquidity} ")
+                # for channel in self._path:
                     # allocation of in_flights as amount on UncertaintyChannels not necessary, as already registered
                     # when running _min_cost_flow.Solve().
                     # channel.allocate_amount(self._amount)
+                pass
 
             if self._status == AttemptStatus.INFLIGHT and value == AttemptStatus.ARRIVED:
                 # TODO differentiating between arrival and settlement
@@ -125,9 +121,6 @@ class Attempt:
             if self._status == AttemptStatus.PLANNED and value == AttemptStatus.FAILED:
                 for channel in self._path:
                     channel.allocate_amount(-self._amount)
-                    logging.debug(
-                        f"uncertainty channel {channel.src}-{channel.dest} inflight:\t{channel.in_flight}.\t"
-                        f"Liquidity: min {channel.min_liquidity}, max {channel.max_liquidity} ")
 
             self._status = value
 

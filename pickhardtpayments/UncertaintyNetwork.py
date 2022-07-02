@@ -3,7 +3,6 @@ from .ChannelGraph import ChannelGraph
 from .UncertaintyChannel import UncertaintyChannel
 from .OracleLightningNetwork import OracleLightningNetwork
 
-from typing import List
 import networkx as nx
 
 DEFAULT_BASE_THRESHOLD = 0
@@ -132,15 +131,18 @@ class UncertaintyNetwork(ChannelGraph):
         receives a payment attempt and adjusts the balances of the UncertaintyChannels and its reverse channels
         along the path.
         """
+        i = 0
         for channel in attempt.path:
+            i += 1
             return_channel = self.get_channel(channel.dest, channel.src, channel.short_channel_id)
             if channel.max_liquidity > attempt.amount:
                 # decrease minimum and maximum liquidity of UncertaintyChannel by amount
                 channel.min_liquidity = max(channel.min_liquidity - attempt.amount, 0)
                 channel.max_liquidity = max(channel.max_liquidity - attempt.amount, 0)
-                # increase mininum and max liquidity of return UncertaintyChannel by amount
-                return_channel.min_liquidity += attempt.amount
-                return_channel.max_liquidity += attempt.amount
+                # increase minimum and max liquidity of return UncertaintyChannel by amount
+                if return_channel:
+                    return_channel.min_liquidity += attempt.amount
+                    return_channel.max_liquidity += attempt.amount
                 # remove in_flight amount of UncertaintyChannel by amount
                 channel.in_flight -= attempt.amount
             else:

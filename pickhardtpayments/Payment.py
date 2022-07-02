@@ -24,9 +24,6 @@ file_handler.setLevel(logging.DEBUG)
 logger.addHandler(file_handler)
 
 
-# logger.addHandler(stdout_handler)
-
-
 class MCFSolverError(Exception):
     """Throws errors when the Min Cost Flow Solver does not return an appropriate result"""
     pass
@@ -300,14 +297,6 @@ class Payment:
 
         the function also prints some results on statistics about the paths of the flow to stdout.
         """
-        logger.info("= _generate_candidate_paths =")
-        logger.debug("stats before generating candidate paths (does not change liquidity in uncertainty channels:")
-        logger.debug(
-            f"uncertainty network inflight - "
-            f"AB: {self.uncertainty_network.network.adj._atlas['A']['B']['513926x395x1']['channel'].in_flight}, "
-            f"AC: {self.uncertainty_network.network.adj._atlas['A']['C']['513926x395x3']['channel'].in_flight}, "
-            f"AD: {self.uncertainty_network.network.adj._atlas['A']['D']['513926x395x4']['channel'].in_flight}")
-
         # First we prepare the min cost flow by getting arcs from the uncertainty network
         self._prepare_mcf_solver(self._mu, self._base)
         self._start_time = time.time()
@@ -326,33 +315,11 @@ class Payment:
         if status != self._min_cost_flow.OPTIMAL:
             logger.debug('Error trying to deliver %s sats from %s to %s.', self._total_amount,
                          self._sender, self._receiver)
-            print('There was an issue with the min cost flow input.')
-            print(f'Status: {status}')
             raise MCFSolverError(f'MinCostFlowBase returns {status_description[status]} '
                                  f'(in Payment._generate_candidate_paths(), '
                                  f'_min_cost_flow.Solve().)')
 
-        logger.debug("stats after _min_cost_flow.Solve():")
-        logger.debug(f"uncertainty network inflight - "
-            f"AB: {self.uncertainty_network.network.adj._atlas['A']['B']['513926x395x1']['channel'].in_flight}, "
-            f"AC: {self.uncertainty_network.network.adj._atlas['A']['C']['513926x395x3']['channel'].in_flight}, "
-            f"AD: {self.uncertainty_network.network.adj._atlas['A']['D']['513926x395x4']['channel'].in_flight}")
-        logging.debug("oracle network inflight balances - AB: {} AC: {}, AD: {}".format(
-            self.oracle_network.get_channel("A", "B", "513926x395x1").in_flight,
-            self.oracle_network.get_channel("A", "C", "513926x395x3").in_flight,
-            self.oracle_network.get_channel("A", "D", "513926x395x4").in_flight))
-
         candidate_paths_in_round = self._dissect_flow_to_paths(self._sender, self._receiver)
-
-        logger.debug("stats after _dissect_flow_to_paths(self._sender, self._receiver):")
-        logger.debug(f"uncertainty network inflight - "
-            f"AB: {self.uncertainty_network.network.adj._atlas['A']['B']['513926x395x1']['channel'].in_flight}, "
-            f"AC: {self.uncertainty_network.network.adj._atlas['A']['C']['513926x395x3']['channel'].in_flight}, "
-            f"AD: {self.uncertainty_network.network.adj._atlas['A']['D']['513926x395x4']['channel'].in_flight}")
-        logging.debug("oracle network inflight balances - AB: {} AC: {}, AD: {}".format(
-            self.oracle_network.get_channel("A", "B", "513926x395x1").in_flight,
-            self.oracle_network.get_channel("A", "C", "513926x395x3").in_flight,
-            self.oracle_network.get_channel("A", "D", "513926x395x4").in_flight))
 
         self._end_time = time.time()
         self.register_candidate_paths(candidate_paths_in_round)
@@ -510,21 +477,10 @@ class Payment:
         If onions failed, the next round is started for the remaining amount in the PaymentSession.
 
         """
-        # test planned payment attempts in this Payment
-        logger.info("= attempt_payments =")
-        logger.debug(f"uncertainty channel liquidity AB:\t{self.uncertainty_network.network.adj._atlas['A']['B']['513926x395x1']['channel'].min_liquidity} - {self.uncertainty_network.network.adj._atlas['A']['B']['513926x395x1']['channel'].max_liquidity}")
-        logger.debug(f"uncertainty channel liquidity AC:\t{self.uncertainty_network.network.adj._atlas['A']['C']['513926x395x3']['channel'].min_liquidity} - {self.uncertainty_network.network.adj._atlas['A']['C']['513926x395x3']['channel'].max_liquidity}")
-        logger.debug(f"uncertainty channel liquidity AD:\t{self.uncertainty_network.network.adj._atlas['A']['D']['513926x395x4']['channel'].min_liquidity} - {self.uncertainty_network.network.adj._atlas['A']['D']['513926x395x4']['channel'].max_liquidity}")
-        logger.debug(
-            f"uncertainty network inflight - AB: {self.uncertainty_network.network.adj._atlas['A']['B']['513926x395x1']['channel'].in_flight}, "
-            f"AC: {self.uncertainty_network.network.adj._atlas['A']['C']['513926x395x3']['channel'].in_flight}, "
-            f"AD: {self.uncertainty_network.network.adj._atlas['A']['D']['513926x395x4']['channel'].in_flight}")
-
         for attempt in self._attempts:
             # FIXME: callback, eventloop. or with future, spawning threads.
 
             success, erring_channel = self._oracle_network.send_onion(attempt.path, attempt.amount)
-            logger.info(f"send_onion successful? {success}")
 
             if success:
                 # setting AttemptStatus from PLANNED to INFLIGHT does not adjust ANY in_flight amounts
@@ -541,18 +497,8 @@ class Payment:
                 self._residual_amount -= attempt.amount
             else:
                 attempt.status = AttemptStatus.FAILED
-                logger.warning(f"Attempt status: {attempt}")
+                logger.debug(f"Attempt status: {attempt}")
 
-            logger.debug(f"uncertainty channel liquidity\tAB:\t{self.uncertainty_network.network.adj._atlas['A']['B']['513926x395x1']['channel'].min_liquidity} - {self.uncertainty_network.network.adj._atlas['A']['B']['513926x395x1']['channel'].max_liquidity}")
-            logger.debug(f"uncertainty channel liquidity\tAC:\t{self.uncertainty_network.network.adj._atlas['A']['C']['513926x395x3']['channel'].min_liquidity} - {self.uncertainty_network.network.adj._atlas['A']['C']['513926x395x3']['channel'].max_liquidity}")
-            logger.debug(f"uncertainty channel liquidity\tAD:\t{self.uncertainty_network.network.adj._atlas['A']['D']['513926x395x4']['channel'].min_liquidity} - {self.uncertainty_network.network.adj._atlas['A']['D']['513926x395x4']['channel'].max_liquidity}")
-            logger.debug(f"uncertainty channel inflight:\tAB\t{self.uncertainty_network.network.adj._atlas['A']['B']['513926x395x1']['channel'].in_flight},"
-                         f"\tAC\t{self.uncertainty_network.network.adj._atlas['A']['C']['513926x395x3']['channel'].in_flight},"
-                         f"\tAD\t{self.uncertainty_network.network.adj._atlas['A']['D']['513926x395x4']['channel'].in_flight}")
-            logger.debug(f"oracle channel inflight\t\t\tAB:\t{self.oracle_network.get_channel('A','B','513926x395x1').in_flight},"
-                         f"\tAC\t{self.oracle_network.get_channel('A','C','513926x395x3').in_flight},"
-                         f"\tAD\t{self.oracle_network.get_channel('A','D','513926x395x4').in_flight}")
-            logger.debug(f"residual amount (to be distributed): {self.residual_amount}")
         return 0
 
     def evaluate_attempts(self, payment):
@@ -607,41 +553,25 @@ class Payment:
 
     def execute(self) -> int:
         logger.info("Executing Payment...")
+        logger.info(f"Payment has {len(list(self.filter_attempts(AttemptStatus.INFLIGHT)))} inflight attempts")
+
         for attempt in self.filter_attempts(AttemptStatus.INFLIGHT):
             try:
-                logger.debug("settling in OracleNetwork...")
+                logger.debug("settling OracleNetwork...")
                 self._oracle_network.settle_payment(attempt)
-                logger.debug("settled.")
-                logger.debug("settling in UncertaintyNetwork...")
+                logger.debug("settled. settling UncertaintyNetwork...")
                 self._uncertainty_network.settle_payment(attempt)
-                logger.debug("settled.")
                 attempt.status = AttemptStatus.SETTLED
+                logger.debug("settled. Status changed to settled")
             except Exception as e:
                 logger.error("An error occurred when executing payment!")
+                logger.error(e)
+
                 self._end_time = time.time()
                 print(e)
                 return -1
         self.successful = True
         self._end_time = time.time()
-
-        logger.debug(f"uncertainty channel liquidity AB:\t"
-            f"{self.uncertainty_network.network.adj._atlas['A']['B']['513926x395x1']['channel'].min_liquidity} - "
-            f"{self.uncertainty_network.network.adj._atlas['A']['B']['513926x395x1']['channel'].max_liquidity}")
-        logger.debug(f"uncertainty channel liquidity AC:\t"
-            f"{self.uncertainty_network.network.adj._atlas['A']['C']['513926x395x3']['channel'].min_liquidity} - "
-            f"{self.uncertainty_network.network.adj._atlas['A']['C']['513926x395x3']['channel'].max_liquidity}")
-        logger.debug(f"uncertainty channel liquidity AD:\t"
-            f"{self.uncertainty_network.network.adj._atlas['A']['D']['513926x395x4']['channel'].min_liquidity} - "
-            f"{self.uncertainty_network.network.adj._atlas['A']['D']['513926x395x4']['channel'].max_liquidity}")
-        logger.debug(f"uncertainty channel inflight:"
-            f"\tAB\t{self.uncertainty_network.network.adj._atlas['A']['B']['513926x395x1']['channel'].in_flight},"
-            f"\tAC\t{self.uncertainty_network.network.adj._atlas['A']['C']['513926x395x3']['channel'].in_flight},"
-            f"\tAD\t{self.uncertainty_network.network.adj._atlas['A']['D']['513926x395x4']['channel'].in_flight}")
-        logger.debug(f"oracle channel inflight\t\t"
-            f"\tAB:\t{self.oracle_network.get_channel('A', 'B', '513926x395x1').in_flight},"
-            f"\tAC\t{self.oracle_network.get_channel('A', 'C', '513926x395x3').in_flight},"
-            f"\tAD\t{self.oracle_network.get_channel('A', 'D', '513926x395x4').in_flight}")
-
         logger.info("payment executed!")
         return 0
 

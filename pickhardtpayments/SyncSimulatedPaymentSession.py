@@ -4,13 +4,9 @@ SyncSimulatedPaymentSession.py
 The core module of the pickhardt payment project.
 An example payment is executed and statistics are run.
 """
-from typing import List
-
-from .Attempt import Attempt, AttemptStatus
 from .Payment import Payment
 from .UncertaintyNetwork import UncertaintyNetwork
 from .OracleLightningNetwork import OracleLightningNetwork
-import time
 
 import logging
 import sys
@@ -71,32 +67,6 @@ class SyncSimulatedPaymentSession:
         self._uncertainty_network.activate_network_wide_uncertainty_reduction(
             n, self._oracle_network)
 
-    def uncertainty_channel_stats(self, AB, AC, AD):
-        uncertainty_channel_balance_end_a_b = self._uncertainty_network.get_channel("A", "B",
-                                                                                    "513926x395x1").max_liquidity
-        uncertainty_channel_balance_end_a_c = self._uncertainty_network.get_channel("A", "C",
-                                                                                    "513926x395x3").max_liquidity
-        uncertainty_channel_balance_end_a_d = self._uncertainty_network.get_channel("A", "D",
-                                                                                    "513926x395x4").max_liquidity
-        total_change = AB + AC + AD - uncertainty_channel_balance_end_a_b - uncertainty_channel_balance_end_a_c - uncertainty_channel_balance_end_a_d
-        session_logger.info("\tA -> B\tA -> C\tA -> D")
-        session_logger.info(
-            "\t{}\t{}\t{}\t--> {}".format(uncertainty_channel_balance_end_a_b, uncertainty_channel_balance_end_a_c,
-                                          uncertainty_channel_balance_end_a_d, total_change))
-
-    def uncertainty_channel_stats_reverse(self, BA, CA, DA):
-        uncertainty_channel_balance_end_b_a = self._uncertainty_network.get_channel("B", "A",
-                                                                                    "513926x395x1").max_liquidity
-        uncertainty_channel_balance_end_c_a = self._uncertainty_network.get_channel("C", "A",
-                                                                                    "513926x395x3").max_liquidity
-        uncertainty_channel_balance_end_d_a = self._uncertainty_network.get_channel("D", "A",
-                                                                                    "513926x395x4").max_liquidity
-        total_change = BA + CA + DA - uncertainty_channel_balance_end_b_a - uncertainty_channel_balance_end_c_a - uncertainty_channel_balance_end_d_a
-        session_logger.info("\tB -> A\tC -> A\tD -> A")
-        session_logger.info(
-            "\t{}\t{}\t{}\t--> {}".format(uncertainty_channel_balance_end_b_a, uncertainty_channel_balance_end_c_a,
-                                          uncertainty_channel_balance_end_d_a, total_change))
-
     def pickhardt_pay(self, src, dest, amt=1, mu=1, base=DEFAULT_BASE_THRESHOLD):
         """
         Conducts one payment with the pickhardt payment methodology.
@@ -131,16 +101,6 @@ class SyncSimulatedPaymentSession:
         # a better stop criteria would be if we compute infeasible flows or if the probabilities
         # are too low or residual amounts decrease to slowly
         # TODO add 'expected value' to break condition for loop
-        total_capacity = self.oracle_network.get_channel("A", "B", "513926x395x1").actual_liquidity + self.oracle_network.get_channel("A", "C", "513926x395x3").actual_liquidity + self.oracle_network.get_channel("A", "D", "513926x395x4").actual_liquidity
-        logging.info("oracle network balances. AB: {} AC: {}, AD: {}, total outbound at A: {}".format(
-            self.oracle_network.get_channel("A", "B", "513926x395x1").actual_liquidity,
-            self.oracle_network.get_channel("A", "C", "513926x395x3").actual_liquidity,
-            self.oracle_network.get_channel("A", "D", "513926x395x4").actual_liquidity, total_capacity))
-        logging.info("oracle network inflight balances. AB: {} AC: {}, AD: {}".format(
-            self.oracle_network.get_channel("A", "B", "513926x395x1").in_flight,
-            self.oracle_network.get_channel("A", "C", "513926x395x3").in_flight,
-            self.oracle_network.get_channel("A", "D", "513926x395x4").in_flight))
-
         while payment.residual_amount > 0 and payment.pickhardt_payment_rounds <= 15:
             sub_payment = Payment(self.uncertainty_network, self.oracle_network, payment.sender, payment.receiver,
                                   payment.residual_amount, mu, base)
@@ -166,12 +126,4 @@ class SyncSimulatedPaymentSession:
             session_logger.info("residual amount: %s sats", payment.residual_amount)
 
         # Final Stats
-        total_capacity = self.oracle_network.get_channel("A", "B","513926x395x1")._actual_liquidity + \
-                         self.oracle_network.get_channel("A", "C", "513926x395x3")._actual_liquidity + \
-                         self.oracle_network.get_channel("A", "D","513926x395x4")._actual_liquidity
-
-        logging.info("oracle network balances. AB: {} AC: {}, AD: {}, total outbound now at A: {}".format(
-            self.oracle_network.get_channel("A", "B", "513926x395x1")._actual_liquidity,
-            self.oracle_network.get_channel("A", "C", "513926x395x3")._actual_liquidity,
-            self.oracle_network.get_channel("A", "D", "513926x395x4")._actual_liquidity, total_capacity))
         payment.get_summary()

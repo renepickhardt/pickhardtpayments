@@ -1,5 +1,7 @@
+import logging
 from typing import List
 
+from .Attempt import Attempt
 from .ChannelGraph import ChannelGraph
 from .OracleChannel import OracleChannel
 import networkx as nx
@@ -36,18 +38,39 @@ class OracleLightningNetwork(ChannelGraph):
     def network(self):
         return self._network
 
+    def allocate_in_flight_on_path(self, attempt: Attempt):
+        """
+        allocates `amt` as in_flights to all channels of the path
+        """
+        logging.debug(f"OracleNetwork: allocating in_flights {attempt.amount} on path")
+        for channel in attempt.path:
+            ch = self.get_channel(channel.src, channel.dest, channel.short_channel_id)
+            ch.in_flight += attempt.amount
+            logging.debug(
+            f"oracle channel {channel.src}-{channel.dest} inflight:\t{ch.in_flight}.\tActual iquidity: {ch.actual_liquidity} ")
+
     def send_onion(self, path, amt):
         """
         :rtype: object
         """
+        logging.info(f"= send_onion with amount {amt} =")
         for channel in path:
-            oracle_channel = self.get_channel(
-                channel.src, channel.dest, channel.short_channel_id)
-            success_of_probe = oracle_channel.can_forward(
-                channel.in_flight + amt)
-            # print(channel,amt,success_of_probe)
+            oracle_channel = self.get_channel(channel.src, channel.dest, channel.short_channel_id)
+            success_of_probe = oracle_channel.can_forward(channel.in_flight + amt)
+            logging.debug(
+                f"probing channel {channel.src}-{channel.dest} is success: {success_of_probe} ")
+
             channel.update_knowledge(amt, success_of_probe)
+            logging.debug(f"uncertainty channel {channel.src}-{channel.dest} inflight:\t{channel.in_flight}.\tLiquidity: min {channel.min_liquidity}, max {channel.max_liquidity} ")
+            logging.debug(f"oracle channel {channel.src}-{channel.dest} inflight:\t\t\t{oracle_channel.in_flight}.\t\tLiquidity: {oracle_channel.actual_liquidity}.")
             if not success_of_probe:
+                logging.error(f"channel liquidity insufficient on {channel.src}-{channel.dest}: {oracle_channel.actual_liquidity}")
+                channel.update_knowledge(amt, success_of_probe)
+                logging.debug(
+                    f"uncertainty channel {channel.src}-{channel.dest} inflight:\t{channel.in_flight}.\tLiquidity: min {channel.min_liquidity}, max {channel.max_liquidity} ")
+                logging.debug(
+                    f"oracle channel {channel.src}-{channel.dest} inflight:\t\t\t{oracle_channel.in_flight}.\t\tLiquidity: {oracle_channel.actual_liquidity}.")
+
                 return False, channel
         return True, None
 
@@ -77,22 +100,26 @@ class OracleLightningNetwork(ChannelGraph):
         mincut, _ = nx.minimum_cut(test_network, source, destination)
         return mincut
 
-    def settle_payment(self, path: List[OracleChannel], payment_amount: int):
+    def settle_payment(self, attempt: Attempt):
         """
-        receives a dictionary with channels and payment amounts and adjusts the balances of the channels along the path.
+        receives a payment attempt and adjusts the balances of the OracleChannels and its reverse channels
+        along the path.
 
         settle_payment should only be called after all send_onions for a payment terminated successfully!
         # TODO testing
         """
-        for channel in path:
+        for channel in attempt.path:
             settlement_channel = self.get_channel(channel.src, channel.dest, channel.short_channel_id)
             return_settlement_channel = self.get_channel(channel.dest, channel.src, channel.short_channel_id)
-            if settlement_channel.actual_liquidity > payment_amount:
+            if settlement_channel.actual_liquidity > attempt.amount:
                 # decrease channel balance in sending channel by amount
-                settlement_channel.actual_liquidity = settlement_channel.actual_liquidity - payment_amount
+                settlement_channel.actual_liquidity = settlement_channel.actual_liquidity - attempt.amount
+                # remove in_flight amount
+                settlement_channel.in_flight -= attempt.amount
                 # increase channel balance in the other direction by amount
-                return_settlement_channel.actual_liquidity = return_settlement_channel.actual_liquidity + payment_amount
+                return_settlement_channel.actual_liquidity = return_settlement_channel.actual_liquidity + attempt.amount
             else:
                 raise Exception("""Channel liquidity on Channel {} is lower than payment amount.
                     \nPayment cannot settle.""".format(channel.short_channel_id))
+
         return 0

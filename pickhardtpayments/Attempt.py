@@ -1,9 +1,9 @@
+import logging
 from enum import Enum
-
 from Channel import Channel
 from pickhardtpayments import UncertaintyChannel
-
 from typing import List
+
 
 class AttemptStatus(Enum):
     PLANNED = 1
@@ -32,7 +32,7 @@ class Attempt:
     :type amount: int
     """
 
-    def __init__(self, path: List[UncertaintyChannel], amount: int = 0):
+    def __init__(self, path: List[Channel], amount: int = 0):
         """Constructor method
         """
         if amount >= 0:
@@ -54,10 +54,9 @@ class Attempt:
         for channel in path:
             self._routing_fee += channel.routing_cost_msat(amount)
             self._probability *= channel.success_probability(amount)
-            # When Attempt is created, all amounts are set inflight. Needs to be updated with AttemptStatus change!
+            # When Attempt is created, all amounts are set inflight. Needs to be updated when AttemptStatus changes!
             # This is to correctly compute conditional probabilities of non-disjoint paths in the same set of paths
             # channel.in_flight(amount)
-            # Fixme: balance allocated more than once?
             channel.allocate_amount(amount)
         self._status = AttemptStatus.PLANNED
 
@@ -66,7 +65,7 @@ class Attempt:
                                                                                        self._amount, self._status.name)
         if self._routing_fee and self._routing_fee > 0:
             description += "\nsuccess probability of {:6.2f}% , fee of {:8.3f} sat and a ppm of {:5} ".format(
-                self._probability * 100, self._routing_fee/1000, int(self._routing_fee * 1000 / self._amount))
+                self._probability * 100, self._routing_fee / 1000, int(self._routing_fee * 1000 / self._amount))
         return description
 
     @property
@@ -106,16 +105,29 @@ class Attempt:
         :type value: AttemptStatus
         """
         if not self._status == value:
-            # remove allocated amounts when Attempt status changes from PLANNED
-            if self._status == AttemptStatus.PLANNED and not value == AttemptStatus.INFLIGHT:
+            logging.info(f"setting AttemptStatus from {self._status} to {value}")
+            if self._status == AttemptStatus.PLANNED and value == AttemptStatus.INFLIGHT:
                 for channel in self._path:
-                    channel.allocate_amount(-self._amount)
+                    logging.debug(
+                        f"uncertainty channel {channel.src}-{channel.dest} inflight:\t{channel.in_flight}.\t"
+                        f"Liquidity: min {channel.min_liquidity}, max {channel.max_liquidity} ")
+                    # allocation of in_flights as amount on UncertaintyChannels not necessary, as already registered
+                    # when running _min_cost_flow.Solve().
+                    # channel.allocate_amount(self._amount)
 
             if self._status == AttemptStatus.INFLIGHT and value == AttemptStatus.ARRIVED:
-                # TODO write amount from inflight to min_liquidity/max_liquidity
-                # for channel in self._path:
-                #    channel.allocate_amount(-self._amount)
+                # TODO differentiating between arrival and settlement
                 pass
+
+            if self._status == AttemptStatus.INFLIGHT and value == AttemptStatus.SETTLED:
+                pass
+
+            if self._status == AttemptStatus.PLANNED and value == AttemptStatus.FAILED:
+                for channel in self._path:
+                    channel.allocate_amount(-self._amount)
+                    logging.debug(
+                        f"uncertainty channel {channel.src}-{channel.dest} inflight:\t{channel.in_flight}.\t"
+                        f"Liquidity: min {channel.min_liquidity}, max {channel.max_liquidity} ")
 
             self._status = value
 

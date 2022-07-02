@@ -51,12 +51,16 @@ class UncertaintyNetwork(ChannelGraph):
         """
         return sum(channel.entropy() for src, dest, channel in self.network.edges(data="channel"))
 
-    def allocate_amount_on_path(self, attempt: Attempt):
+    def allocate_amount_on_path(self, attempt: Attempt, success: bool):
         """
         allocates `amt` to all channels of the path of `UncertaintyChannels`
         """
         for channel in attempt.path:
-            channel.allocate_amount(attempt.amount)
+            channel.update_knowledge(attempt.amount, success)
+            # allocation not needed in case of success, because inflight are already on Channels
+            # but correction necessary if unsuccessful
+            if not success:
+                channel.allocate_amount(attempt.amount)
 
     def reset_uncertainty_network(self):
         """
@@ -122,3 +126,24 @@ class UncertaintyNetwork(ChannelGraph):
                 # print(key, arc.entropy())
         print("channels with full knowledge: ", len(ego_network))
         print("channels with 2 Bits of less entropy: ", len(foaf_network))
+
+    def settle_payment(self, attempt: Attempt):
+        """
+        receives a payment attempt and adjusts the balances of the UncertaintyChannels and its reverse channels
+        along the path.
+        """
+        for channel in attempt.path:
+            return_channel = self.get_channel(channel.dest, channel.src, channel.short_channel_id)
+            if channel.max_liquidity > attempt.amount:
+                # decrease minimum and maximum liquidity of UncertaintyChannel by amount
+                channel.min_liquidity = max(channel.min_liquidity - attempt.amount, 0)
+                channel.max_liquidity = max(channel.max_liquidity - attempt.amount, 0)
+                # increase mininum and max liquidity of return UncertaintyChannel by amount
+                return_channel.min_liquidity += attempt.amount
+                return_channel.max_liquidity += attempt.amount
+                # remove in_flight amount of UncertaintyChannel by amount
+                channel.in_flight -= attempt.amount
+            else:
+                raise Exception("""Channel liquidity on Channel {} is lower than payment amount.
+                    \nPayment cannot settle.""".format(channel.short_channel_id))
+        return 0

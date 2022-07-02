@@ -5,6 +5,7 @@ The core module of the pickhardt payment project.
 An example payment is executed and statistics are run.
 """
 from typing import List
+
 from .Attempt import Attempt, AttemptStatus
 from .Payment import Payment
 from .UncertaintyNetwork import UncertaintyNetwork
@@ -70,6 +71,32 @@ class SyncSimulatedPaymentSession:
         self._uncertainty_network.activate_network_wide_uncertainty_reduction(
             n, self._oracle_network)
 
+    def uncertainty_channel_stats(self, AB, AC, AD):
+        uncertainty_channel_balance_end_a_b = self._uncertainty_network.get_channel("A", "B",
+                                                                                    "513926x395x1").max_liquidity
+        uncertainty_channel_balance_end_a_c = self._uncertainty_network.get_channel("A", "C",
+                                                                                    "513926x395x3").max_liquidity
+        uncertainty_channel_balance_end_a_d = self._uncertainty_network.get_channel("A", "D",
+                                                                                    "513926x395x4").max_liquidity
+        total_change = AB + AC + AD - uncertainty_channel_balance_end_a_b - uncertainty_channel_balance_end_a_c - uncertainty_channel_balance_end_a_d
+        session_logger.info("\tA -> B\tA -> C\tA -> D")
+        session_logger.info(
+            "\t{}\t{}\t{}\t--> {}".format(uncertainty_channel_balance_end_a_b, uncertainty_channel_balance_end_a_c,
+                                          uncertainty_channel_balance_end_a_d, total_change))
+
+    def uncertainty_channel_stats_reverse(self, BA, CA, DA):
+        uncertainty_channel_balance_end_b_a = self._uncertainty_network.get_channel("B", "A",
+                                                                                    "513926x395x1").max_liquidity
+        uncertainty_channel_balance_end_c_a = self._uncertainty_network.get_channel("C", "A",
+                                                                                    "513926x395x3").max_liquidity
+        uncertainty_channel_balance_end_d_a = self._uncertainty_network.get_channel("D", "A",
+                                                                                    "513926x395x4").max_liquidity
+        total_change = BA + CA + DA - uncertainty_channel_balance_end_b_a - uncertainty_channel_balance_end_c_a - uncertainty_channel_balance_end_d_a
+        session_logger.info("\tB -> A\tC -> A\tD -> A")
+        session_logger.info(
+            "\t{}\t{}\t{}\t--> {}".format(uncertainty_channel_balance_end_b_a, uncertainty_channel_balance_end_c_a,
+                                          uncertainty_channel_balance_end_d_a, total_change))
+
     def pickhardt_pay(self, src, dest, amt=1, mu=1, base=DEFAULT_BASE_THRESHOLD):
         """
         Conducts one payment with the pickhardt payment methodology.
@@ -77,7 +104,7 @@ class SyncSimulatedPaymentSession:
         conduct one experiment! might need to call oracle.reset_uncertainty_network() first
         I could not put it here as some experiments require sharing of liquidity information
 
-        subpayment.initiate() starts the first round with calling the solver to get paths. For each path the attempt is
+        sub_payment.initiate() starts the first round with calling the solver to get paths. For each path the attempt is
         registered as planned and the amount is registered in the uncertainty network as in_flight (better name can be
         determined). On the Attempts of this first round send_onion() is called and with this the attempts are then
         tested against the OracleNetwork. Every failed attempt from send_onion is then updated as
@@ -95,7 +122,6 @@ class SyncSimulatedPaymentSession:
 
         """
         session_logger.info('*** new pickhardt payment ***')
-        self.forget_information()
 
         # Initialise Payment
         payment = Payment(self.uncertainty_network, self.oracle_network, src, dest, amt, mu, base)
@@ -105,7 +131,17 @@ class SyncSimulatedPaymentSession:
         # a better stop criteria would be if we compute infeasible flows or if the probabilities
         # are too low or residual amounts decrease to slowly
         # TODO add 'expected value' to break condition for loop
-        while payment.residual_amount > 0 and payment.pickhardt_payment_rounds <= 10:
+        total_capacity = self.oracle_network.get_channel("A", "B", "513926x395x1").actual_liquidity + self.oracle_network.get_channel("A", "C", "513926x395x3").actual_liquidity + self.oracle_network.get_channel("A", "D", "513926x395x4").actual_liquidity
+        logging.info("oracle network balances. AB: {} AC: {}, AD: {}, total outbound at A: {}".format(
+            self.oracle_network.get_channel("A", "B", "513926x395x1").actual_liquidity,
+            self.oracle_network.get_channel("A", "C", "513926x395x3").actual_liquidity,
+            self.oracle_network.get_channel("A", "D", "513926x395x4").actual_liquidity, total_capacity))
+        logging.info("oracle network inflight balances. AB: {} AC: {}, AD: {}".format(
+            self.oracle_network.get_channel("A", "B", "513926x395x1").in_flight,
+            self.oracle_network.get_channel("A", "C", "513926x395x3").in_flight,
+            self.oracle_network.get_channel("A", "D", "513926x395x4").in_flight))
+
+        while payment.residual_amount > 0 and payment.pickhardt_payment_rounds <= 15:
             sub_payment = Payment(self.uncertainty_network, self.oracle_network, payment.sender, payment.receiver,
                                   payment.residual_amount, mu, base)
 
@@ -113,7 +149,7 @@ class SyncSimulatedPaymentSession:
             sub_payment.initiate()
 
             # Try to send amounts in attempts and registers if success or not
-            # update our information in the UncertaintyNetwork and OracleNetwork
+            # update our information regarding the in_flights in the UncertaintyNetwork and OracleNetwork
             sub_payment.attempt_payments()
 
             # run some simple statistics and depict them
@@ -125,6 +161,17 @@ class SyncSimulatedPaymentSession:
         # When residual amount is 0 then settle payment.
         if payment.residual_amount == 0:
             payment.execute()
+        else:
+            session_logger.info("Payment failed!")
+            session_logger.info("residual amount: %s sats", payment.residual_amount)
 
         # Final Stats
+        total_capacity = self.oracle_network.get_channel("A", "B","513926x395x1")._actual_liquidity + \
+                         self.oracle_network.get_channel("A", "C", "513926x395x3")._actual_liquidity + \
+                         self.oracle_network.get_channel("A", "D","513926x395x4")._actual_liquidity
+
+        logging.info("oracle network balances. AB: {} AC: {}, AD: {}, total outbound now at A: {}".format(
+            self.oracle_network.get_channel("A", "B", "513926x395x1")._actual_liquidity,
+            self.oracle_network.get_channel("A", "C", "513926x395x3")._actual_liquidity,
+            self.oracle_network.get_channel("A", "D", "513926x395x4")._actual_liquidity, total_capacity))
         payment.get_summary()

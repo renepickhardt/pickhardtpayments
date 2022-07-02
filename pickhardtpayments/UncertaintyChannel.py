@@ -1,3 +1,5 @@
+import logging
+
 from .Channel import Channel
 from .OracleLightningNetwork import OracleLightningNetwork
 from math import log2 as log
@@ -41,7 +43,7 @@ class UncertaintyChannel(Channel):
             self.entropy(),
             self.min_liquidity,
             self.max_liquidity,
-            self.in_flight)
+            self._in_flight)
 
     @property
     def max_liquidity(self):
@@ -56,6 +58,12 @@ class UncertaintyChannel(Channel):
         return self._in_flight
 
     # FIXME: store timestamps when using setters so that we know when we learnt our belief
+    @in_flight.setter
+    def in_flight(self, value: int):
+        self._in_flight = value
+
+
+    # FIXME: store timestamps when using setters so that we know when we learnt our belief
     @min_liquidity.setter
     def min_liquidity(self, value: int):
         self._min_liquidity = value
@@ -65,11 +73,6 @@ class UncertaintyChannel(Channel):
     def max_liquidity(self, value: int):
         self._max_liquidity = value
 
-    # FIXME: store timestamps when using setters so that we know when we learnt our belief
-    @in_flight.setter
-    def in_flight(self, value: int):
-        self._in_flight = value
-
     @property
     def conditional_capacity(self, respect_inflight=True):
         # FIXME: make sure if respect_inflight=True is needed for linearized cost
@@ -78,6 +81,7 @@ class UncertaintyChannel(Channel):
 
         min_liquidity = max(self.min_liquidity, self.in_flight)
         return max(self.max_liquidity - min_liquidity, 0)
+
 
     def allocate_amount(self, amt: int):
         """
@@ -96,7 +100,7 @@ class UncertaintyChannel(Channel):
         self.min_liquidity = 0
         self.max_liquidity = self.capacity
         # FIXME: Is there a case where we want to keep inflight information but reset information?
-        self.in_flight = 0
+        self._in_flight = 0
 
     def entropy(self):
         """
@@ -259,7 +263,7 @@ class UncertaintyChannel(Channel):
         return pieces
     """
 
-    def update_knowledge(self, amt: int, success_of_probe):
+    def update_knowledge(self, amt: int, probing_successful):
         """
         updates our knowledge about the channel if we tried to probe it for amount `amt`
 
@@ -267,10 +271,13 @@ class UncertaintyChannel(Channel):
         In mainnet Lightning our oracle will not work on a per_channel level. This will change the data
         flow. Here for simplicity of the simulation we make use of the Oracle on a per channel level
         """
-        if success_of_probe:
-            self.min_liquidity = max(self.min_liquidity, self.in_flight+amt)
+        logging.debug(f"updating knowledge in UncertaintyChannel {self.src}{self.dest}")
+        if probing_successful:
+            # self.min_liquidity = max(self.min_liquidity, self.in_flight+amt)
+            self.min_liquidity = max(self.min_liquidity, amt)
         else:
-            self.max_liquidity = min(self.max_liquidity, self.in_flight+amt)
+            # self.max_liquidity = min(self.max_liquidity, self.in_flight+amt)
+            self.max_liquidity = min(self.max_liquidity, self.in_flight)
 
     # needed for BOLT14 test experiment
     def learn_n_bits(self, oracle: OracleLightningNetwork, n: int = 1):

@@ -9,4 +9,7 @@ pickhardtpayments/__pycache__
 *.json
 examples/.json
 
+# from documentation
+docs
+
 pickhardt_pay.log

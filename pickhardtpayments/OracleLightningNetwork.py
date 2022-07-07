@@ -102,12 +102,12 @@ class OracleLightningNetwork(ChannelGraph):
         mincut, _ = nx.minimum_cut(test_network, source, destination)
         return mincut
 
-    def settle_payment(self, attempt: Attempt):
+    def settle_attempt(self, attempt: Attempt):
         """
         receives a payment attempt and adjusts the balances of the OracleChannels and its reverse channels
         along the path.
 
-        settle_payment should only be called after all send_onions for a payment terminated successfully!
+        settle_attempt should only be called after all send_onions for a payment terminated successfully!
         """
         for channel in attempt.path:
             settlement_channel = self.get_channel(channel.src, channel.dest, channel.short_channel_id)

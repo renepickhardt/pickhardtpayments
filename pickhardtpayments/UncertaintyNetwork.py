@@ -129,7 +129,7 @@ class UncertaintyNetwork(ChannelGraph):
         print("channels with full knowledge: ", len(ego_network))
         print("channels with 2 Bits of less entropy: ", len(foaf_network))
 
-    def settle_payment(self, attempt: Attempt):
+    def settle_attempt(self, attempt: Attempt):
         """
         receives a payment attempt and adjusts the balances of the UncertaintyChannels and its reverse channels
         along the path.

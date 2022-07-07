@@ -550,7 +550,7 @@ class Payment:
         """
         Executes the Payment.
         This is the last step in the payment loop. After probing the attempts the current in_flight attempts are
-        settled. To achieve this, settle_payment() is called on the Oracle Network as well as on the Uncertainty
+        settled. To achieve this, settle_attempt() is called on the Oracle Network as well as on the Uncertainty
         Network. Here the in_flights should be removed and the channel balances - or the belief about the channel
         balances - are adjusted.
 
@@ -560,9 +560,9 @@ class Payment:
         for attempt in self.filter_attempts(AttemptStatus.INFLIGHT):
             try:
                 logger.debug("settling OracleNetwork...")
-                self._oracle_network.settle_payment(attempt)
+                self._oracle_network.settle_attempt(attempt)
                 logger.debug("settled. settling UncertaintyNetwork...")
-                self._uncertainty_network.settle_payment(attempt)
+                self._uncertainty_network.settle_attempt(attempt)
                 attempt.status = AttemptStatus.SETTLED
                 logger.debug("settled. Status changed to settled")
             except Exception as e:

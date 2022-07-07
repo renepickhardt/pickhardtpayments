@@ -140,11 +140,13 @@ class UncertaintyNetwork(ChannelGraph):
             if channel.max_liquidity > attempt.amount:
                 # decrease minimum and maximum liquidity of UncertaintyChannel by amount
                 channel.min_liquidity = max(channel.min_liquidity - attempt.amount, 0)
-                channel.max_liquidity = max(channel.max_liquidity - attempt.amount, 0)  # TODO re-evaluate it this is best estimate
+                channel.max_liquidity = max(channel.max_liquidity - attempt.amount, 0)
                 # increase minimum and max liquidity of return UncertaintyChannel by amount
                 if return_channel:
-                    return_channel.min_liquidity += attempt.amount  # TODO cap with capacity
-                    return_channel.max_liquidity += attempt.amount  # TODO cap with capacity
+                    return_channel.min_liquidity = min(return_channel.min_liquidity + attempt.amount,
+                                                       return_channel.capacity)
+                    return_channel.max_liquidity = min(return_channel.max_liquidity + attempt.amount,
+                                                       return_channel.capacity)
                 # remove in_flight amount of UncertaintyChannel by amount
                 channel.in_flight -= attempt.amount
             else:

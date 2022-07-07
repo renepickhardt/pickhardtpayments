@@ -1,10 +1,8 @@
 import time
-from logging import Logger
+#from logging import Logger
 from typing import List
-
 from ortools.graph import pywrapgraph
 import networkx as nx
-
 from .UncertaintyNetwork import UncertaintyNetwork
 from .OracleLightningNetwork import OracleLightningNetwork
 from .Attempt import Attempt, AttemptStatus
@@ -12,15 +10,11 @@ from .Attempt import Attempt, AttemptStatus
 import logging
 import sys
 
-# logger = logging.getLogger(__name__)
-logger: Logger = logging.getLogger()
-# formatter = logging.Formatter('%(asctime)s.%(msecs)03d | %(levelname)s | %(message)s', datefmt='%H:%M:%S')
+logger = logging.getLogger()
 stdout_handler = logging.StreamHandler(sys.stdout)
 stdout_handler.setLevel(logging.INFO)
-# stdout_handler.setFormatter(formatter)
 file_handler = logging.FileHandler('pickhardt_pay.log', mode='a')
 file_handler.setLevel(logging.DEBUG)
-# file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
 
@@ -37,18 +31,27 @@ class Payment:
     several paths, to increase the probability of being successfully delivered.
     The PaymentClass holds all necessary information about a payment.
     It also holds information that helps to calculate performance statistics about the payment.
-
-    :param sender: sender address for the payment
-    :type sender: class:`str`
-    :param receiver: receiver address for the payment
-    :type receiver: class:`str`
-    :param total_amount: The total amount of sats to be delivered from source address to destination address.
-    :type total_amount: class:`int`
     """
 
     def __init__(self, uncertainty_network: UncertaintyNetwork, oracle_network: OracleLightningNetwork, sender,
                  receiver, total_amount: int, mu: int, base: int):
         """Constructor method
+        Builds an instance of Payment
+
+        :param uncertainty_network: the UncertaintyNetwork containing the belief about the Lightning Network
+        :type uncertainty_network: UncertaintyNetwork
+        :param oracle_network: the OracleNetwork that represents the current state of the Lightning Network
+        :type oracle_network: OracleLightningNetwork
+        :param sender: sender address for the payment
+        :type sender: class:`str`
+        :param receiver: receiver address for the payment
+        :type receiver: class:`str`
+        :param total_amount: The total amount of sats to be delivered from source address to destination address.
+        :type total_amount: class:`int`
+        :param mu:
+        :type mu: int
+        :param base:
+        :type base: int
         """
         self._successful = False
         self._ppm = None
@@ -112,7 +115,7 @@ class Payment:
 
     @property
     def life_time(self) -> float:
-        """Time period from when payment was created until the paymentfinished, either by being aborted or by
+        """Time period from when payment was created until the payment finished, either by being aborted or by
         successful settlement
 
         :return: time in seconds from creation of the payment to successful payment or failure of payment.
@@ -125,7 +128,8 @@ class Payment:
 
     @property
     def attempts(self) -> List[Attempt]:
-        """Returns all onions that were built and are associated with this Payment.
+        """Returns all Attempts that were built and are associated with this Payment.
+        These attempts hold the Uncertainty Channels for the path to send a (partial) amount of the payment.
 
         :return: A list of Attempts of this payment.
         :rtype: list[Attempt]
@@ -134,19 +138,19 @@ class Payment:
 
     @property
     def oracle_network(self) -> OracleLightningNetwork:
-        """Returns all onions that were built and are associated with this Payment.
+        """Returns the Oracle Network where in_flight amounts for the (partial) Payment need to be allocated.
 
-        :return: A list of Attempts of this payment.
-        :rtype: list[Attempt]
+        :return: The OracleLightningNetwork that the Payment is created for
+        :rtype: OracleLightningNetwork
         """
         return self._oracle_network
 
     @property
     def uncertainty_network(self) -> UncertaintyNetwork:
-        """Returns all onions that were built and are associated with this Payment.
+        """Returns the UncertaintyNetwork that the (partial) Payment is associated with and built on.
 
-        :return: A list of Attempts of this payment.
-        :rtype: list[Attempt]
+        :return: The UncertaintyNetwork that the Payment is related to
+        :rtype: UncertaintyNetwork
         """
         return self._uncertainty_network
 
@@ -176,8 +180,10 @@ class Payment:
     def filter_fees(self, flag: AttemptStatus) -> float:
         """Returns the fees for all Attempts/onions for this payment, that arrived but have not yet been settled.
 
-        It's the sum of the routing fees of all arrived attempts.
+        It's the sum of the routing fees of all attempts with the status `flag`.
 
+        :param flag: the key that should be used to filter the AttemptStatus of the Attempts
+        :type: AttemptStatus
         :return: fee in sats for arrived attempts of Payment
         :rtype: float
         """
@@ -202,7 +208,7 @@ class Payment:
 
     @property
     def ppm(self) -> float:
-        """Returns the fees that accrued for this payment. It's the sum of the routing fees of all settled onions.
+        """Returns the sum of the routing fees of all settled onions in relation to the total amount.
 
         :return: fee in ppm for successful delivery and settlement of payment
         :rtype: float
@@ -220,16 +226,15 @@ class Payment:
 
     @property
     def uncertainty_network_entropy_delta(self) -> int:
-        """Returns the number of rounds needed for this payment.
+        """Returns the change in entropy of the UncertaintyNetwork as a learning from this payment.
 
-        :return: The number of rounds needed for this payment.
+        :return: Change in entropy of the UncertaintyNetwork
         :rtype: int
         """
         return self._uncertainty_network_entropy - self._uncertainty_network.entropy()
 
     def increment_pickhardt_payment_rounds(self):
         """Increments the number of rounds needed for this payment by 1.
-
         """
         self._pickhardt_payment_rounds += 1
 
@@ -239,7 +244,7 @@ class Payment:
         :param flag: the state of the attempts that should be filtered for
         :type: Attempt.AttemptStatus
 
-        :return: A list of successful Attempts of this Payment, which could be settled.
+        :return: A list of Attempts with status `flag` of this Payment.
         :rtype: list[Attempt]
         """
         for attempt in self._attempts:
@@ -257,18 +262,20 @@ class Payment:
 
     @successful.setter
     def successful(self, value):
-        """Sets flag if all inflight attempts of the payment could settle successfully.
+        """Sets the flag if all inflight attempts of the payment could settle successfully.
 
         :param value: True if Payment settled successfully, else False.
         :type: bool
         """
         self._successful = value
 
-    def initiate(self) -> int:
+    def initiate(self):
+        """Starts the first step of the processing of a payment.
+        The function calls the solver so that the paths for the Payment are established.
+        """
         logger.debug("")
         logger.debug(f"Trying to deliver {self._total_amount} satoshi:")
         self._generate_candidate_paths()
-        return 0
 
     def _prepare_integer_indices_for_nodes(self):
         """
@@ -283,23 +290,22 @@ class Payment:
             self._mcf_id[node_id] = k
             self._node_key[k] = node_id
 
-    def _generate_candidate_paths(self):
+    def _generate_candidate_paths(self) -> float:
         """
         computes the optimal payment split to deliver `amt` from `src` to `dest` and updates our belief about the
-        liquidity
+        liquidity. This payment split is represented in the Attempts created.
+        These Attempts are added to this Payment instance.
         IMPORTANT: Allocates inflight amounts on Uncertainty Channels. This needs to be the case, so that the
         calculation of the following paths respects previous tries.
 
         This is one step within the payment loop.
 
-        Returns the residual amount of the `amt` that could not be delivered and the paid fees
-        (on a per channel base not including fees for downstream fees) for the delivered amount
-
-        the function also prints some results on statistics about the paths of the flow to stdout.
+        :return: the time elapsed between calling the solver and appending the attempts to the payment.
+        :rtype: bool
         """
         # First we prepare the min cost flow by getting arcs from the uncertainty network
-        self._prepare_mcf_solver(self._mu, self._base)
         self._start_time = time.time()
+        self._prepare_mcf_solver(self._mu, self._base)
         logger.debug("solving mcf...")
         status = self._min_cost_flow.Solve()
 
@@ -321,11 +327,16 @@ class Payment:
 
         candidate_paths_in_round = self._dissect_flow_to_paths(self._sender, self._receiver)
 
-        self._end_time = time.time()
         self.register_candidate_paths(candidate_paths_in_round)
+        self._end_time = time.time()
         return self._end_time - self._start_time
 
     def register_candidate_paths(self, candidate_paths):
+        """
+        Adds the Attempts to the Payment
+        :param candidate_paths: List of Attempts that need to be added to the Payment
+        :type: List[Attempt]
+        """
         self._attempts.extend(candidate_paths)
 
     def _prepare_mcf_solver(self, mu: int, base_fee: int):
@@ -337,6 +348,11 @@ class Payment:
 
         returns the instantiated min_cost_flow object from the Google OR-lib that contains the piecewise linearized
         problem
+
+        :param mu:
+        :type: int
+        :param base_fee:
+        :type: int
         """
         self._min_cost_flow = pywrapgraph.SimpleMinCostFlow()
         self._arc_to_channel = {}
@@ -403,8 +419,8 @@ class Payment:
     def _dissect_flow_to_paths(self, s, d) -> List[Attempt]:
         """
         A standard algorithm to dissect a flow into several paths.
-
         FIXME: Note that this dissection while accurate is probably not optimal in practice.
+
         As noted in our Probabilistic payment delivery paper the payment process is a bernoulli trial
         and I assume it makes sense to dissect the flow into paths of similar likelihood to make most
         progress but this is a mere conjecture at this point. I expect quite a bit of research will be
@@ -416,7 +432,6 @@ class Payment:
             flow = self._min_cost_flow.Flow(i)  # *QUANTIZATION
             if flow == 0:
                 continue
-            # Fixme: fix balance management in uncertainty network
             src, dest, channel, _ = self._arc_to_channel[i]
             if G.has_edge(src, dest):
                 if channel.short_channel_id in G[src][dest]:
@@ -435,7 +450,7 @@ class Payment:
         while used_flow > 0:
             try:
                 path = nx.shortest_path(G, s, d)
-            except:
+            except Exception as e:
                 break
             channel_path, used_flow = self._make_channel_path(G, path)
             attempts.append(Attempt(channel_path, used_flow))
@@ -460,7 +475,7 @@ class Payment:
             dest = path[i]
             yield src, dest
 
-    def attempt_payments(self) -> int:
+    def attempt_payments(self):
         """
         We attempt all planned payments and test the success against the oracle in particular this
         method changes - depending on the outcome of each payment - our belief about the uncertainty
@@ -478,32 +493,15 @@ class Payment:
 
         """
         for attempt in self._attempts:
-            # FIXME: callback, eventloop. or with future, spawning threads.
+            # TODO: add callback, eventloop. or with future, spawning threads.
 
-            success, erring_channel = self._oracle_network.send_onion(attempt.path, attempt.amount)
-
+            success, erring_channel = self._oracle_network.send_onion(attempt)
             if success:
-                # setting AttemptStatus from PLANNED to INFLIGHT does not adjust ANY in_flight amounts
-                attempt.status = AttemptStatus.INFLIGHT
-
-                # in_flight amounts in UncertaintyNetwork have been placed when calling _min_cost_flow.Solve()
-                # channel balances in UncertaintyNetwork have been adjusted when getting result from send_onion
-                # so on further adjustment necessary in UncertaintyNetwork
-                # self._uncertainty_network.allocate_amount_on_path(attempt, success)
-
-                # replicate HTLCs on the Channels
-                self.oracle_network.allocate_in_flight_on_path(attempt)
-
                 self._residual_amount -= attempt.amount
-            else:
-                attempt.status = AttemptStatus.FAILED
-                logger.debug(f"Attempt status: {attempt}")
 
-        return 0
-
-    def evaluate_attempts(self, payment):
+    def evaluate_attempts(self):
         """
-        helper function to collect statistics about attempts and print them
+        Helper function to collect statistics about attempts and sends info about the attempts to the logfile
 
         """
         residual_amt = 0
@@ -539,21 +537,25 @@ class Payment:
             fraction = expected_sats_to_deliver * 100. / amt
             logger.debug("expected to deliver \t{:10} sats \t({:4.2f}%)".format(
                 int(expected_sats_to_deliver), fraction))
-            fraction = (amt - residual_amt) * 100. / (amt)
+            fraction = (amt - residual_amt) * 100. / amt
             logger.debug("actually delivered \t{:10} sats \t({:4.2f}%)".format(
                 amt - residual_amt, fraction))
         logger.debug("deviation: \t\t{:4.2f}".format(
             (amt - residual_amt) / (expected_sats_to_deliver + 1)))
         logger.debug("planned fee: \t\t{:8.0f} sat".format(self.total_fees / 1000))
         logger.debug("fees for in_flights:\t{:8.0f} sat".format(self.filter_fees(AttemptStatus.INFLIGHT) / 1000))
-
         logger.debug("Runtime of flow computation: {:4.2f} sec".format(self._end_time - self._start_time))
 
-        return len(self.attempts), len(list(self.filter_attempts(AttemptStatus.FAILED)))
-
     def execute(self) -> int:
+        """
+        Executes the Payment.
+        This is the last step in the payment loop. After probing the attempts the current in_flight attempts are
+        settled. To achieve this, settle_payment() is called on the Oracle Network as well as on the Uncertainty
+        Network. Here the in_flights should be removed and the channel balances - or the belief about the channel
+        balances - are adjusted.
+
+        """
         logger.info("Executing Payment...")
-        logger.info(f"Payment has {len(list(self.filter_attempts(AttemptStatus.INFLIGHT)))} inflight attempts")
 
         for attempt in self.filter_attempts(AttemptStatus.INFLIGHT):
             try:
@@ -576,6 +578,9 @@ class Payment:
         return 0
 
     def get_summary(self):
+        """
+        This prints a summary of the payment with statistical information to the logfile.
+        """
         logger.info("SUMMARY:")
         logger.info("========")
         logger.info("Rounds of mcf-computations:\t{:3}".format(self.pickhardt_payment_rounds))

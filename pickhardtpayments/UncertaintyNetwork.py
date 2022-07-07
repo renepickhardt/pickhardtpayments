@@ -8,6 +8,19 @@ import networkx as nx
 DEFAULT_BASE_THRESHOLD = 0
 
 
+def allocate_amount_on_path(attempt: Attempt, success: bool):
+    """
+    allocates `amt` to all channels of the path of `UncertaintyChannels`
+    """
+    channel: UncertaintyChannel
+    for channel in attempt.path:
+        channel.update_knowledge(attempt.amount, success)
+        # allocation not needed in case of success, because inflight are already on Channels
+        # but correction necessary if unsuccessful
+        if not success:
+            channel.allocate_amount(attempt.amount)
+
+
 class UncertaintyNetwork(ChannelGraph):
     """
     The UncertaintyNetwork is the main data structure to store our belief about the
@@ -24,6 +37,7 @@ class UncertaintyNetwork(ChannelGraph):
                  prune_network: bool = True):
         self._channel_graph = nx.MultiDiGraph()
         for src, dest, keys, channel in channel_graph.network.edges(data="channel", keys=True):
+            # Fixme: shouldn't this variable be called uncertainty_channel?
             oracle_channel = UncertaintyChannel(channel)
             if channel.base_fee <= base_threshold:
                 self._channel_graph.add_edge(oracle_channel.src,
@@ -49,17 +63,6 @@ class UncertaintyNetwork(ChannelGraph):
         computes to total uncertainty in the network summing the entropy of all channels
         """
         return sum(channel.entropy() for src, dest, channel in self.network.edges(data="channel"))
-
-    def allocate_amount_on_path(self, attempt: Attempt, success: bool):
-        """
-        allocates `amt` to all channels of the path of `UncertaintyChannels`
-        """
-        for channel in attempt.path:
-            channel.update_knowledge(attempt.amount, success)
-            # allocation not needed in case of success, because inflight are already on Channels
-            # but correction necessary if unsuccessful
-            if not success:
-                channel.allocate_amount(attempt.amount)
 
     def reset_uncertainty_network(self):
         """
@@ -131,18 +134,17 @@ class UncertaintyNetwork(ChannelGraph):
         receives a payment attempt and adjusts the balances of the UncertaintyChannels and its reverse channels
         along the path.
         """
-        i = 0
+        channel: UncertaintyChannel
         for channel in attempt.path:
-            i += 1
             return_channel = self.get_channel(channel.dest, channel.src, channel.short_channel_id)
             if channel.max_liquidity > attempt.amount:
                 # decrease minimum and maximum liquidity of UncertaintyChannel by amount
                 channel.min_liquidity = max(channel.min_liquidity - attempt.amount, 0)
-                channel.max_liquidity = max(channel.max_liquidity - attempt.amount, 0)
+                channel.max_liquidity = max(channel.max_liquidity - attempt.amount, 0)  # TODO re-evaluate it this is best estimate
                 # increase minimum and max liquidity of return UncertaintyChannel by amount
                 if return_channel:
-                    return_channel.min_liquidity += attempt.amount
-                    return_channel.max_liquidity += attempt.amount
+                    return_channel.min_liquidity += attempt.amount  # TODO cap with capacity
+                    return_channel.max_liquidity += attempt.amount  # TODO cap with capacity
                 # remove in_flight amount of UncertaintyChannel by amount
                 channel.in_flight -= attempt.amount
             else:

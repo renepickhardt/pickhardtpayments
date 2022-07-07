@@ -56,7 +56,8 @@ class SyncSimulatedPaymentSession:
 
     def forget_information(self):
         """
-        forgets all the information in the UncertaintyNetwork that is a member of the PaymentSession
+        Forgets all the information in the UncertaintyNetwork the PaymentSession
+        Resets minimum liquidity to 0, max liquidity to capacity and in_flights to 0.
         """
         self._uncertainty_network.reset_uncertainty_network()
 
@@ -71,25 +72,24 @@ class SyncSimulatedPaymentSession:
         """
         Conducts one payment with the pickhardt payment methodology.
 
-        conduct one experiment! might need to call oracle.reset_uncertainty_network() first
-        I could not put it here as some experiments require sharing of liquidity information
-
-        sub_payment.initiate() starts the first round with calling the solver to get paths. For each path the attempt is
-        registered as planned and the amount is registered in the uncertainty network as in_flight (better name can be
-        determined). On the Attempts of this first round send_onion() is called and with this the attempts are then
-        tested against the OracleNetwork. Every failed attempt from send_onion is then updated as
+        :sub_payment.initiate(): starts the first round and calls the solver to get paths. For each path the attempt is
+        registered as planned and the amount is registered in the uncertainty network as in_flight.
+        :OracleLightningNetwork.send_onion(): is called on the Attempts of this first round and with this the attempts
+        are then tested against the OracleNetwork. Every failed attempt from send_onion is then updated as
         AttemptStatus.FAILED and the in_flight amounts are removed from the UncertaintyNetwork.
-        For every successful  call of send_onion the amount is registered in the OracleNetwork as inflight and the
+        For every successful call of send_onion the amount is registered in the OracleNetwork as inflight and the
         AttemptStatus is set to AttemptStatus.INFLIGHT. The amounts have been allocated in the UncertaintyNetwork
         already, so no change is necessary here.
         If onions failed, the next round is started for the remaining amount.
+        `evaluate attempts` sends statistics on the Attempt to the logs.
+        `register_sub_payment` collects and adds all Attempts - failed and inflight - to the original Payment.
 
         After the total amount has been allocated on the OracleNetwork, Payment.finalize() is called. This then
         reflects the arrival of all payments at the receiver, who then passes the preimage to unlock the
         HTLCs/inflight amounts. For all Attempts of the Payment with AttemptStatus.INFLIGHT the balances of the nodes
-        are updated in the OracleNetwork on both channels (a refactoring of the OracleNetwork can still be
-        considered) and also on the Uncertainty Network. The AttemptStatus is consequently set to SETTLED.
-
+        are updated in the OracleNetwork on both channels.
+        The AttemptStatus is consequently set to SETTLED, which triggers the update of the channels in the
+        UncertaintyNetwork.
         """
         session_logger.info('*** new pickhardt payment ***')
 
@@ -113,7 +113,7 @@ class SyncSimulatedPaymentSession:
             sub_payment.attempt_payments()
 
             # run some simple statistics and depict them
-            sub_payment.evaluate_attempts(payment)
+            sub_payment.evaluate_attempts()
 
             # add attempts of sub_payment to payment
             payment.register_sub_payment(sub_payment)

@@ -1,6 +1,8 @@
-from .Attempt import Attempt
-from .ChannelGraph import ChannelGraph
-from .OracleChannel import OracleChannel
+import logging
+
+from Attempt import Attempt, AttemptStatus
+from ChannelGraph import ChannelGraph
+from OracleChannel import OracleChannel
 import networkx as nx
 
 DEFAULT_BASE_THRESHOLD = 0
@@ -43,17 +45,35 @@ class OracleLightningNetwork(ChannelGraph):
             ch = self.get_channel(channel.src, channel.dest, channel.short_channel_id)
             ch.in_flight += attempt.amount
 
-    def send_onion(self, path, amt):
+    def send_onion(self, attempt: Attempt):
         """
         :rtype: object
         """
-        for channel in path:
+        for channel in attempt.path:
             oracle_channel = self.get_channel(channel.src, channel.dest, channel.short_channel_id)
-            success_of_probe = oracle_channel.can_forward(channel.in_flight + amt)
-            channel.update_knowledge(amt, success_of_probe)
+            # probing for current amount in addition to current in_flights
+            success_of_probe = oracle_channel.can_forward(channel.in_flight + attempt.amount)
+            # updating knowledge about the probed amount (amount PLUS in_flight)
+            channel.update_knowledge(channel.in_flight + attempt.amount, success_of_probe)
             if not success_of_probe:
-                channel.update_knowledge(amt, success_of_probe)
+                logging.debug(f"failed channel {oracle_channel.short_channel_id}")
+
+                # Status change on attempt to FAILED removes in_flights from UncertaintyChannels in path
+                attempt.status = AttemptStatus.FAILED
+                logging.debug(f"Attempt status: {attempt}")
                 return False, channel
+
+        # setting AttemptStatus from PLANNED to INFLIGHT does not adjust ANY in_flight amounts
+        attempt.status = AttemptStatus.INFLIGHT
+
+        # in_flight amounts in UncertaintyNetwork have been placed when calling _min_cost_flow.Solve()
+        # channel balances in UncertaintyNetwork have been adjusted when getting result from send_onion
+        # so on further adjustment necessary in UncertaintyNetwork
+
+        # replicate HTLCs on the Channels
+        # self.oracle_network.allocate_in_flight_on_path(attempt)
+        self.allocate_in_flight_on_path(attempt)
+
         return True, None
 
     def theoretical_maximum_payable_amount(self, source: str, destination: str, base_fee: int = DEFAULT_BASE_THRESHOLD):
@@ -99,7 +119,8 @@ class OracleLightningNetwork(ChannelGraph):
                 settlement_channel.in_flight -= attempt.amount
                 # increase channel balance in the other direction by amount
                 if return_settlement_channel:
-                    return_settlement_channel.actual_liquidity = return_settlement_channel.actual_liquidity + attempt.amount
+                    return_settlement_channel.actual_liquidity = return_settlement_channel.actual_liquidity \
+                                                                 + attempt.amount
             else:
                 raise Exception("""Channel liquidity on Channel {} is lower than payment amount.
                     \nPayment cannot settle.""".format(channel.short_channel_id))

@@ -12,6 +12,7 @@ def allocate_amount_on_path(attempt: Attempt, success: bool):
     """
     allocates `amt` to all channels of the path of `UncertaintyChannels`
     """
+    print("allocate_amount_on_path called in uncertainty network")
     channel: UncertaintyChannel
     for channel in attempt.path:
         channel.update_knowledge(attempt.amount, success)
@@ -136,20 +137,9 @@ class UncertaintyNetwork(ChannelGraph):
         """
         channel: UncertaintyChannel
         for channel in attempt.path:
-            return_channel = self.get_channel(channel.dest, channel.src, channel.short_channel_id)
-            if channel.max_liquidity > attempt.amount:
-                # decrease minimum and maximum liquidity of UncertaintyChannel by amount
-                channel.min_liquidity = max(channel.min_liquidity - attempt.amount, 0)
-                channel.max_liquidity = max(channel.max_liquidity - attempt.amount, 0)
-                # increase minimum and max liquidity of return UncertaintyChannel by amount
-                if return_channel:
-                    return_channel.min_liquidity = min(return_channel.min_liquidity + attempt.amount,
-                                                       return_channel.capacity)
-                    return_channel.max_liquidity = min(return_channel.max_liquidity + attempt.amount,
-                                                       return_channel.capacity)
-                # remove in_flight amount of UncertaintyChannel by amount
-                channel.in_flight -= attempt.amount
-            else:
-                raise Exception("""Channel liquidity on Channel {} is lower than payment amount.
-                    \nPayment cannot settle.""".format(channel.short_channel_id))
+            # no adjustment on minimum and maximum liquidity of channel and return channel necessary, because
+            # this has already been learnt in send_onion when updating knowledge after info about success.
+
+            # remove in_flight amount from UncertaintyChannel
+            channel.in_flight = max(channel.in_flight - attempt.amount, 0)
         return 0

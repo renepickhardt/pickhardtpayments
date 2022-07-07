@@ -127,7 +127,7 @@ class Attempt:
             if self._status == AttemptStatus.PLANNED and value == AttemptStatus.FAILED:
                 # remove all in_flights from UncertaintyChannels along the path in Attempt
                 for channel in self._path:
-                    channel.allocate_amount(-self._amount)
+                    channel.allocate_amount(-self.amount)
 
             self._status = value
 

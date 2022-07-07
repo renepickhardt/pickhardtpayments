@@ -1,5 +1,5 @@
 import time
-#from logging import Logger
+# from logging import Logger
 from typing import List
 from ortools.graph import pywrapgraph
 import networkx as nx
@@ -327,7 +327,25 @@ class Payment:
 
         candidate_paths_in_round = self._dissect_flow_to_paths(self._sender, self._receiver)
 
+        logger.info(
+            "(02) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};\tcond_cap: {:>10,}".format(
+                candidate_paths_in_round[0].path[0].src[:4],
+                candidate_paths_in_round[0].path[0].dest[:4],
+                candidate_paths_in_round[0].path[0].min_liquidity,
+                candidate_paths_in_round[0].path[0].max_liquidity,
+                candidate_paths_in_round[0].path[0].in_flight,
+                candidate_paths_in_round[0].path[0].conditional_capacity))
+
         self.register_candidate_paths(candidate_paths_in_round)
+
+        logger.info(
+            "(03) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};\tcond_cap: {:>10,}".format(
+                self.attempts[0].path[0].src[:4],
+                self.attempts[0].path[0].dest[:4],
+                self.attempts[0].path[0].min_liquidity,
+                self.attempts[0].path[0].max_liquidity,
+                self.attempts[0].path[0].in_flight,
+                self.attempts[0].path[0].conditional_capacity))
         self._end_time = time.time()
         return self._end_time - self._start_time
 
@@ -453,6 +471,14 @@ class Payment:
             except Exception as e:
                 break
             channel_path, used_flow = self._make_channel_path(G, path)
+            logger.info("(01) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
+                        "\tcond_cap: {:>10,}, used flow {:>10,}".format(channel_path[0].src[:4],
+                                                                        channel_path[0].dest[:4],
+                                                                        channel_path[0].min_liquidity,
+                                                                        channel_path[0].max_liquidity,
+                                                                        channel_path[0].in_flight,
+                                                                        channel_path[0].conditional_capacity,
+                                                                        used_flow))
             attempts.append(Attempt(channel_path, used_flow))
 
             # reduce the flow from the selected path
@@ -492,12 +518,21 @@ class Payment:
         If onions failed, the next round is started for the remaining amount in the PaymentSession.
 
         """
-        for attempt in self._attempts:
+        for attempt in self.attempts:
             # TODO: add callback, eventloop. or with future, spawning threads.
 
             success, erring_channel = self._oracle_network.send_onion(attempt)
             if success:
                 self._residual_amount -= attempt.amount
+
+        logger.info("(04) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
+                    "\tcond_cap: {:>10,}, used flow {:>10,}".format(self.attempts[0].path[0].src[:4],
+                                                                    self.attempts[0].path[0].dest[:4],
+                                                                    self.attempts[0].path[0].min_liquidity,
+                                                                    self.attempts[0].path[0].max_liquidity,
+                                                                    self.attempts[0].path[0].in_flight,
+                                                                    self.attempts[0].path[0].conditional_capacity,
+                                                                    self.attempts[0].amount))
 
     def evaluate_attempts(self):
         """
@@ -562,7 +597,7 @@ class Payment:
                 logger.debug("settling OracleNetwork...")
                 self._oracle_network.settle_attempt(attempt)
                 logger.debug("settled. settling UncertaintyNetwork...")
-                self._uncertainty_network.settle_attempt(attempt)
+                self._uncertainty_network.settle_attempt(attempt)  # removes in_flights
                 attempt.status = AttemptStatus.SETTLED
                 logger.debug("settled. Status changed to settled")
             except Exception as e:

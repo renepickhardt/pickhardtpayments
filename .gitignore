@@ -13,3 +13,6 @@ examples/.json
 docs
 
 pickhardt_pay.log
+
+# avoid workbook
+examples/PickhardtPaymentsExample.ipynb

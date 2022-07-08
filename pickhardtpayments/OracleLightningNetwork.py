@@ -37,43 +37,35 @@ class OracleLightningNetwork(ChannelGraph):
     def network(self):
         return self._network
 
-    def allocate_in_flight_on_path(self, attempt: Attempt):
+    def allocate_amount_as_inflight_on_path(self, attempt: Attempt):
         """
         allocates `amt` as in_flights to all channels of the path
         """
-        for channel in attempt.path:
-            ch = self.get_channel(channel.src, channel.dest, channel.short_channel_id)
-            ch.in_flight += attempt.amount
+        for uncertainty_channel in attempt.path:
+            oracle_channel = self.get_channel(uncertainty_channel.src, uncertainty_channel.dest, uncertainty_channel.short_channel_id)
+            oracle_channel.in_flight += attempt.amount
 
     def send_onion(self, attempt: Attempt):
         """
         :rtype: object
         """
-        for channel in attempt.path:
-            oracle_channel = self.get_channel(channel.src, channel.dest, channel.short_channel_id)
-            # probing for current amount in addition to current in_flights
-            success_of_probe = oracle_channel.can_forward(channel.in_flight + attempt.amount)
+        for uncertainty_channel in attempt.path:
+            oracle_channel = self.get_channel(uncertainty_channel.src, uncertainty_channel.dest, uncertainty_channel.short_channel_id)
+            # probing for current amount in addition to current in_flights in oracle network
+            success_of_probe = oracle_channel.can_forward(oracle_channel.in_flight + attempt.amount)
             # updating knowledge about the probed amount (amount PLUS in_flight)
-            channel.update_knowledge(channel.in_flight + attempt.amount, success_of_probe)
             if not success_of_probe:
-                logging.debug(f"failed channel {oracle_channel.short_channel_id}")
-
-                # Status change on attempt to FAILED removes in_flights from UncertaintyChannels in path
+                logging.debug("failed channel {}-{} with actual liquidity of {:,} sats".format(
+                    oracle_channel.src,oracle_channel.dest, oracle_channel.actual_liquidity))
                 attempt.status = AttemptStatus.FAILED
                 logging.debug(f"Attempt status: {attempt}")
-                return False, channel
+                return False, uncertainty_channel
 
-        # setting AttemptStatus from PLANNED to INFLIGHT does not adjust ANY in_flight amounts
+        # setting AttemptStatus from PLANNED to INFLIGHT does not change in_flight amounts
         attempt.status = AttemptStatus.INFLIGHT
-
-        # in_flight amounts in UncertaintyNetwork have been placed when calling _min_cost_flow.Solve()
-        # channel balances in UncertaintyNetwork have been adjusted when getting result from send_onion
-        # so on further adjustment necessary in UncertaintyNetwork
-
         # replicate HTLCs on the Channels
-        # self.oracle_network.allocate_in_flight_on_path(attempt)
-        self.allocate_in_flight_on_path(attempt)
-
+        logging.debug("allocating {:,} ".format(attempt.amount))
+        self.allocate_amount_as_inflight_on_path(attempt)
         return True, None
 
     def theoretical_maximum_payable_amount(self, source: str, destination: str, base_fee: int = DEFAULT_BASE_THRESHOLD):

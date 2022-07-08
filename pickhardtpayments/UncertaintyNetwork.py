@@ -1,3 +1,5 @@
+import logging
+
 from Attempt import Attempt
 from .ChannelGraph import ChannelGraph
 from .UncertaintyChannel import UncertaintyChannel
@@ -6,20 +8,6 @@ from .OracleLightningNetwork import OracleLightningNetwork
 import networkx as nx
 
 DEFAULT_BASE_THRESHOLD = 0
-
-
-def allocate_amount_on_path(attempt: Attempt, success: bool):
-    """
-    allocates `amt` to all channels of the path of `UncertaintyChannels`
-    """
-    print("allocate_amount_on_path called in uncertainty network")
-    channel: UncertaintyChannel
-    for channel in attempt.path:
-        channel.update_knowledge(attempt.amount, success)
-        # allocation not needed in case of success, because inflight are already on Channels
-        # but correction necessary if unsuccessful
-        if not success:
-            channel.allocate_amount(attempt.amount)
 
 
 class UncertaintyNetwork(ChannelGraph):
@@ -38,13 +26,13 @@ class UncertaintyNetwork(ChannelGraph):
                  prune_network: bool = True):
         self._channel_graph = nx.MultiDiGraph()
         for src, dest, keys, channel in channel_graph.network.edges(data="channel", keys=True):
-            # Fixme: shouldn't this variable be called uncertainty_channel?
-            oracle_channel = UncertaintyChannel(channel)
+            uncertainty_channel = UncertaintyChannel(channel)
             if channel.base_fee <= base_threshold:
-                self._channel_graph.add_edge(oracle_channel.src,
-                                             oracle_channel.dest,
-                                             key=oracle_channel.short_channel_id,
-                                             channel=oracle_channel)
+                self._channel_graph.add_edge(uncertainty_channel.src,
+                                             uncertainty_channel.dest,
+                                             key=uncertainty_channel.short_channel_id,
+                                             channel=uncertainty_channel)
+
         self._prune = prune_network
 
     @property
@@ -135,11 +123,10 @@ class UncertaintyNetwork(ChannelGraph):
         receives a payment attempt and adjusts the balances of the UncertaintyChannels and its reverse channels
         along the path.
         """
-        channel: UncertaintyChannel
-        for channel in attempt.path:
+        for uncertainty_channel in attempt.path:
             # no adjustment on minimum and maximum liquidity of channel and return channel necessary, because
-            # this has already been learnt in send_onion when updating knowledge after info about success.
+            # this has already been learnt in send_onion when updating knowledge after info about success of send_onion.
 
             # remove in_flight amount from UncertaintyChannel
-            channel.in_flight = max(channel.in_flight - attempt.amount, 0)
+            uncertainty_channel.allocate_inflights(-attempt.amount)
         return 0

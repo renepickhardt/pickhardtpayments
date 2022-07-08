@@ -1,3 +1,5 @@
+import logging
+
 from Channel import Channel
 import random
 
@@ -14,7 +16,8 @@ class OracleChannel(Channel):
         self._actual_liquidity = actual_liquidity
         self._in_flight = 0
         if actual_liquidity is None or actual_liquidity >= self.capacity or actual_liquidity < 0:
-            self._actual_liquidity = self.capacity
+            # self._actual_liquidity = self.capacity
+            self._actual_liquidity = 0.5 * self.capacity
             # self._actual_liquidity = random.randint(0, self.capacity)
 
     def __str__(self):
@@ -63,6 +66,7 @@ class OracleChannel(Channel):
         """
         if 0 <= in_flight_amt <= self.capacity:
             self._in_flight = in_flight_amt
+            logging.debug("in_flight on {}-{} now {:,} ".format(self.src, self.dest, in_flight_amt))
         else:
             raise ValueError(f"inflight amount for channel {self.short_channel_id} cannot be set. "
                              f"Amount {in_flight_amt} is negative or higher than capacity")

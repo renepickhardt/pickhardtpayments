@@ -1,8 +1,7 @@
 import logging
 
-import OracleLightningNetwork
 from Channel import Channel
-# from OracleLightningNetwork import OracleLightningNetwork
+from OracleLightningNetwork import OracleLightningNetwork
 from math import log2 as log
 
 DEFAULT_MU = 1
@@ -35,11 +34,11 @@ class UncertaintyChannel(Channel):
 
     def __init__(self, channel: Channel):
         super().__init__(channel.cln_jsn)
+        self._short_channel_id = channel.short_channel_id
         self._in_flight = None
         self._min_liquidity = None
         self._max_liquidity = None
         self.forget_information()
-        self._return_channel = None
 
     def __str__(self):
         return "Size: {} with {:4.2f} bits of Entropy. Uncertainty Interval: [{},{}] inflight: {}".format(
@@ -66,14 +65,6 @@ class UncertaintyChannel(Channel):
     @min_liquidity.setter
     def min_liquidity(self, value: int):
         self._min_liquidity = value
-
-    @property
-    def return_channel(self):
-        return self._return_channel
-
-    @return_channel.setter
-    def return_channel(self, channel: Channel):
-        self._return_channel = channel
 
     @property
     def in_flight(self):
@@ -106,7 +97,7 @@ class UncertaintyChannel(Channel):
         min_liquidity = max(self.min_liquidity, self.in_flight)
         return max(self.max_liquidity - min_liquidity, 0)
 
-    def allocate_amount(self, amt: int):
+    def allocate_inflights(self, amt: int):
         """
         assign or remove amount that is assigned to be `in_flight`.
         """
@@ -286,7 +277,7 @@ class UncertaintyChannel(Channel):
         return pieces
     """
 
-    def update_knowledge(self, amt: int, probing_successful):
+    def update_knowledge(self, amt: int, probing_successful, return_channel):
         """
         updates our knowledge about the channel if we tried to probe it for amount `amt`
 
@@ -300,23 +291,23 @@ class UncertaintyChannel(Channel):
         :type: bool
         """
         if probing_successful:
-            self.min_liquidity = max(self.min_liquidity, amt)
-            self.max_liquidity = max(self.max_liquidity, amt)
-            if self.return_channel:
-                self.return_channel.min_liquidity = min(self.return_channel.min_liquidity,
-                                                        self.return_channel.capacity - amt)
-                self.return_channel.max_liquidity = min(self.return_channel.max_liquidit,
-                                                        self.return_channel.capacity - amt)
+            self.min_liquidity = max(self.min_liquidity, self.in_flight + amt)
+            self.max_liquidity = max(self.max_liquidity, self.in_flight + amt)
+            if return_channel:
+                return_channel.min_liquidity = min(return_channel.min_liquidity,
+                                                        return_channel.capacity - self.in_flight - amt)
+                return_channel.max_liquidity = min(return_channel.max_liquidity,
+                                                        return_channel.capacity - self.in_flight - amt)
             else:
                 logging.debug(f"no return channel in UncertaintyNetwork for {self.short_channel_id}")
         else:
-            self.min_liquidity = min(self.min_liquidity, amt)
-            self.max_liquidity = min(self.max_liquidity, amt)
-            if self.return_channel:
-                self.return_channel.min_liquidity = max(self.return_channel.min_liquidity,
-                                                        self.return_channel.capacity - amt)
-                self.return_channel.max_liquidity = max(self.return_channel.max_liquidity,
-                                                        self.return_channel.capacity - amt)
+            self.min_liquidity = min(self.min_liquidity, self.in_flight + amt)
+            self.max_liquidity = min(self.max_liquidity, self.in_flight + amt)
+            if return_channel:
+                return_channel.min_liquidity = max(return_channel.min_liquidity,
+                                                        return_channel.capacity - amt)
+                return_channel.max_liquidity = max(return_channel.max_liquidity,
+                                                        return_channel.capacity - amt)
             else:
                 logging.debug(f"no return channel in UncertaintyNetwork for {self.short_channel_id}")
 

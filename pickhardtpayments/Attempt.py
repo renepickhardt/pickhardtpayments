@@ -1,6 +1,5 @@
 from enum import Enum
 from Channel import Channel
-from UncertaintyChannel import UncertaintyChannel
 from typing import List
 
 
@@ -30,7 +29,7 @@ class Attempt:
     the UncertaintyNetwork.
     """
 
-    def __init__(self, path: List[UncertaintyChannel], amount: int = 0):
+    def __init__(self, path: List[Channel], amount: int = 0):
         """Constructor method
         Builds an instance of Attempt.
 
@@ -57,20 +56,17 @@ class Attempt:
             valid_path = valid_path and (path[i - 1].dest == path[i].src)
             i += 1
         if valid_path:
-            self._path: List[UncertaintyChannel] = path
+            self._path: List[Channel] = path
 
         self._routing_fee = 0
         self._probability = 1
         for channel in path:
             self._routing_fee += channel.routing_cost_msat(amount)
-            self._probability *= channel.success_probability(amount)  # TODO: change to log
-            # When Attempt is created, all amounts are set inflight. Needs to be updated when AttemptStatus changes!
-            # This is to correctly compute conditional probabilities of non-disjoint paths in the same set of paths
-            channel.allocate_amount(amount)
+            self._probability *= channel.success_probability(amount)  # TODO: change to log sum
         self._status = AttemptStatus.PLANNED
 
     def __str__(self):
-        description = "Attempt with {} channels to deliver {} sats and status {}.".format(len(self._path),
+        description = "Attempt with {} channels to deliver {:>10,} sats and status {}.".format(len(self._path),
                                                                                           self._amount,
                                                                                           self._status.name)
         if self._routing_fee and self._routing_fee > 0:
@@ -125,9 +121,7 @@ class Attempt:
                 pass
 
             if self._status == AttemptStatus.PLANNED and value == AttemptStatus.FAILED:
-                # remove all in_flights from UncertaintyChannels along the path in Attempt
-                for channel in self._path:
-                    channel.allocate_amount(-self.amount)
+                pass
 
             self._status = value
 

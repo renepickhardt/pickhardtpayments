@@ -163,7 +163,7 @@ class Payment:
         self._attempts.extend(sub_payment.attempts)
         self._residual_amount = sub_payment.residual_amount
         self.increment_pickhardt_payment_rounds()
-        logger.debug("remaining amount: %s", self.residual_amount)
+        logger.debug("remaining amount: {:>10,}".format(self.residual_amount))
 
     @property
     def settlement_fees(self) -> float:
@@ -327,35 +327,21 @@ class Payment:
 
         candidate_paths_in_round = self._dissect_flow_to_paths(self._sender, self._receiver)
 
-        logger.info(
-            "(02) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};\tcond_cap: {:>10,}".format(
-                candidate_paths_in_round[0].path[0].src[:4],
-                candidate_paths_in_round[0].path[0].dest[:4],
-                candidate_paths_in_round[0].path[0].min_liquidity,
-                candidate_paths_in_round[0].path[0].max_liquidity,
-                candidate_paths_in_round[0].path[0].in_flight,
-                candidate_paths_in_round[0].path[0].conditional_capacity))
+        for count, attempt in enumerate(candidate_paths_in_round):
+            logger.debug("path no. {} for {:,} sats".format(count, attempt.amount))
+            for channel in attempt.path:
+                logger.debug("(02) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};\t"
+                             "cond_cap: {:>10,}".format(channel.src[:4],
+                                                        channel.dest[:4],
+                                                        channel.min_liquidity,
+                                                        channel.max_liquidity,
+                                                        channel.in_flight,
+                                                        channel.conditional_capacity))
 
-        self.register_candidate_paths(candidate_paths_in_round)
+        self.attempts.extend(candidate_paths_in_round)
 
-        logger.info(
-            "(03) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};\tcond_cap: {:>10,}".format(
-                self.attempts[0].path[0].src[:4],
-                self.attempts[0].path[0].dest[:4],
-                self.attempts[0].path[0].min_liquidity,
-                self.attempts[0].path[0].max_liquidity,
-                self.attempts[0].path[0].in_flight,
-                self.attempts[0].path[0].conditional_capacity))
         self._end_time = time.time()
         return self._end_time - self._start_time
-
-    def register_candidate_paths(self, candidate_paths):
-        """
-        Adds the Attempts to the Payment
-        :param candidate_paths: List of Attempts that need to be added to the Payment
-        :type: List[Attempt]
-        """
-        self._attempts.extend(candidate_paths)
 
     def _prepare_mcf_solver(self, mu: int, base_fee: int):
         """
@@ -471,14 +457,15 @@ class Payment:
             except Exception as e:
                 break
             channel_path, used_flow = self._make_channel_path(G, path)
-            logger.info("(01) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
-                        "\tcond_cap: {:>10,}, used flow {:>10,}".format(channel_path[0].src[:4],
-                                                                        channel_path[0].dest[:4],
-                                                                        channel_path[0].min_liquidity,
-                                                                        channel_path[0].max_liquidity,
-                                                                        channel_path[0].in_flight,
-                                                                        channel_path[0].conditional_capacity,
-                                                                        used_flow))
+
+            logger.info("(01) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};\tcond_cap: {:>10,}"
+                        ";\tflow: {:>10,}".format(channel_path[0].src[:4],
+                                                  channel_path[0].dest[:4],
+                                                  channel_path[0].min_liquidity,
+                                                  channel_path[0].max_liquidity,
+                                                  channel_path[0].in_flight,
+                                                  channel_path[0].conditional_capacity, used_flow))
+
             attempts.append(Attempt(channel_path, used_flow))
 
             # reduce the flow from the selected path
@@ -518,21 +505,38 @@ class Payment:
         If onions failed, the next round is started for the remaining amount in the PaymentSession.
 
         """
-        for attempt in self.attempts:
+        for attempt in self.filter_attempts(AttemptStatus.PLANNED):
             # TODO: add callback, eventloop. or with future, spawning threads.
 
-            success, erring_channel = self._oracle_network.send_onion(attempt)
-            if success:
+            # probe channel in Oracle Network
+            success_of_probe, erring_channel = self._oracle_network.send_onion(attempt)
+            logger.debug(f"attempting payments successful: {success_of_probe} for {attempt}")
+
+            # TODO: learn: adjust knowledge about channels
+            for uncertainty_channel in iter(attempt.path):
+                return_channel = self.uncertainty_network.get_channel(uncertainty_channel.dest,
+                                                                      uncertainty_channel.src,
+                                                                      uncertainty_channel.short_channel_id)
+                if uncertainty_channel == erring_channel:
+                    uncertainty_channel.update_knowledge(attempt.amount, False, return_channel)
+                    break
+                uncertainty_channel.update_knowledge(attempt.amount, True, return_channel)
+
+            # when successful, place amount as additional in_flight on UncertaintyChannels along path
+            if success_of_probe:
+                for uncertainty_channel in attempt.path:
+                    uncertainty_channel.allocate_inflights(attempt.amount)
                 self._residual_amount -= attempt.amount
 
-        logger.info("(04) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
-                    "\tcond_cap: {:>10,}, used flow {:>10,}".format(self.attempts[0].path[0].src[:4],
-                                                                    self.attempts[0].path[0].dest[:4],
-                                                                    self.attempts[0].path[0].min_liquidity,
-                                                                    self.attempts[0].path[0].max_liquidity,
-                                                                    self.attempts[0].path[0].in_flight,
-                                                                    self.attempts[0].path[0].conditional_capacity,
-                                                                    self.attempts[0].amount))
+            logger.info(
+                "(03) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
+                "\tcond_cap: {:>10,}".format(
+                    attempt.path[0].src[:4],
+                    attempt.path[0].dest[:4],
+                    attempt.path[0].min_liquidity,
+                    attempt.path[0].max_liquidity,
+                    attempt.path[0].in_flight,
+                    attempt.path[0].conditional_capacity))
 
     def evaluate_attempts(self):
         """
@@ -595,11 +599,27 @@ class Payment:
         for attempt in self.filter_attempts(AttemptStatus.INFLIGHT):
             try:
                 logger.debug("settling OracleNetwork...")
-                self._oracle_network.settle_attempt(attempt)
+                self._oracle_network.settle_attempt(attempt)  # updates in_flights and liquidity in both paths
                 logger.debug("settled. settling UncertaintyNetwork...")
-                self._uncertainty_network.settle_attempt(attempt)  # removes in_flights
+                self._uncertainty_network.settle_attempt(attempt)  # removes along path
                 attempt.status = AttemptStatus.SETTLED
                 logger.debug("settled. Status changed to settled")
+                for channel in attempt.path:
+                    logger.info("(04) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
+                                "\tcond_cap: {:>10,}".format(channel.src[:4],
+                                                             channel.dest[:4],
+                                                             channel.min_liquidity,
+                                                             channel.max_liquidity,
+                                                             channel.in_flight,
+                                                             channel.conditional_capacity))
+                    return_channel = self.uncertainty_network.get_channel(channel.dest, channel.src, channel.short_channel_id)
+                    logger.info("(04) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
+                                "\tcond_cap: {:>10,}".format(return_channel.src[:4],
+                                                             return_channel.dest[:4],
+                                                             return_channel.min_liquidity,
+                                                             return_channel.max_liquidity,
+                                                             return_channel.in_flight,
+                                                             return_channel.conditional_capacity))
             except Exception as e:
                 logger.error("An error occurred when executing payment!")
                 logger.error(e)
@@ -609,7 +629,7 @@ class Payment:
                 return -1
         self.successful = True
         self._end_time = time.time()
-        logger.info("payment executed!")
+        logger.debug("payment executed!")
         return 0
 
     def get_summary(self):

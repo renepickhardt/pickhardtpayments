@@ -123,7 +123,7 @@ class SyncSimulatedPaymentSession:
             payment.execute()
         else:
             session_logger.info("Payment failed!")
-            session_logger.info("residual amount: %s sats", payment.residual_amount)
+            session_logger.info("residual amount: {:>10,} sats".format(payment.residual_amount))
 
         # Final Stats
         payment.get_summary()

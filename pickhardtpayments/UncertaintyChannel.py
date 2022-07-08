@@ -1,5 +1,6 @@
 import logging
 
+from Attempt import AttemptStatus
 from Channel import Channel
 from OracleLightningNetwork import OracleLightningNetwork
 from math import log2 as log
@@ -277,7 +278,7 @@ class UncertaintyChannel(Channel):
         return pieces
     """
 
-    def update_knowledge(self, amt: int, probing_successful, return_channel):
+    def update_knowledge(self, attempt, return_channel):
         """
         updates our knowledge about the channel if we tried to probe it for amount `amt`
 
@@ -290,7 +291,10 @@ class UncertaintyChannel(Channel):
         :param probing_successful: Could the amount be sent?
         :type: bool
         """
-        if probing_successful:
+        amt = attempt.amount
+        # Fixme: here is a mistake - status and probing_result are different!
+
+        if attempt.status == AttemptStatus.INFLIGHT:
             self.min_liquidity = max(self.min_liquidity, self.in_flight + amt)
             self.max_liquidity = max(self.max_liquidity, self.in_flight + amt)
             if return_channel:
@@ -300,7 +304,7 @@ class UncertaintyChannel(Channel):
                                                         return_channel.capacity - self.in_flight - amt)
             else:
                 logging.debug(f"no return channel in UncertaintyNetwork for {self.short_channel_id}")
-        else:
+        elif attempt.status == AttemptStatus.FAILED:
             self.min_liquidity = min(self.min_liquidity, self.in_flight + amt)
             self.max_liquidity = min(self.max_liquidity, self.in_flight + amt)
             if return_channel:
@@ -310,6 +314,8 @@ class UncertaintyChannel(Channel):
                                                         return_channel.capacity - amt)
             else:
                 logging.debug(f"no return channel in UncertaintyNetwork for {self.short_channel_id}")
+        else:
+            logging.error("error in update knowledge - wrong status")
 
     # needed for BOLT14 test experiment
     def learn_n_bits(self, oracle: OracleLightningNetwork, n: int = 1):

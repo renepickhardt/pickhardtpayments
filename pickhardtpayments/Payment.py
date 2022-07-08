@@ -518,9 +518,9 @@ class Payment:
                                                                       uncertainty_channel.src,
                                                                       uncertainty_channel.short_channel_id)
                 if uncertainty_channel == erring_channel:
-                    uncertainty_channel.update_knowledge(attempt.amount, False, return_channel)
+                    uncertainty_channel.update_knowledge(attempt, return_channel)
                     break
-                uncertainty_channel.update_knowledge(attempt.amount, True, return_channel)
+                uncertainty_channel.update_knowledge(attempt, return_channel)
 
             # when successful, place amount as additional in_flight on UncertaintyChannels along path
             if success_of_probe:

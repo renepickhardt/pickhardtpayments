@@ -274,7 +274,7 @@ class Payment:
         The function calls the solver so that the paths for the Payment are established.
         """
         logger.debug("")
-        logger.debug(f"Trying to deliver {self._total_amount} satoshi:")
+        logger.debug("Trying to deliver {:,} satoshi:".format(self._total_amount))
         self._generate_candidate_paths()
 
     def _prepare_integer_indices_for_nodes(self):
@@ -595,7 +595,7 @@ class Payment:
 
         """
         logger.info("Executing Payment...")
-
+        logger.debug("settling {} Attempts:".format(len(list(self.filter_attempts(AttemptStatus.INFLIGHT)))))
         for attempt in self.filter_attempts(AttemptStatus.INFLIGHT):
             try:
                 logger.debug("settling OracleNetwork...")
@@ -612,14 +612,16 @@ class Payment:
                                                              channel.max_liquidity,
                                                              channel.in_flight,
                                                              channel.conditional_capacity))
-                    return_channel = self.uncertainty_network.get_channel(channel.dest, channel.src, channel.short_channel_id)
-                    logger.info("(04) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
-                                "\tcond_cap: {:>10,}".format(return_channel.src[:4],
-                                                             return_channel.dest[:4],
-                                                             return_channel.min_liquidity,
-                                                             return_channel.max_liquidity,
-                                                             return_channel.in_flight,
-                                                             return_channel.conditional_capacity))
+                    return_channel = self.uncertainty_network.get_channel(channel.dest, channel.src,
+                                                                          channel.short_channel_id)
+                    if return_channel:
+                        logger.info("(04) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
+                                    "\tcond_cap: {:>10,}".format(return_channel.src[:4],
+                                                                 return_channel.dest[:4],
+                                                                 return_channel.min_liquidity,
+                                                                 return_channel.max_liquidity,
+                                                                 return_channel.in_flight,
+                                                                 return_channel.conditional_capacity))
             except Exception as e:
                 logger.error("An error occurred when executing payment!")
                 logger.error(e)
@@ -650,3 +652,4 @@ class Payment:
             self.settlement_fees / 1000, int(self.settlement_fees * 1000 / self.total_amount)))
         logger.info("used mu: %s", self._mu)
         logger.info("Payment was successful: %s", self.successful)
+        logger.debug("")

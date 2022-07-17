@@ -9,8 +9,9 @@ DEFAULT_BASE_THRESHOLD = 0
 
 class OracleLightningNetwork(ChannelGraph):
 
-    def __init__(self, channel_graph: ChannelGraph):
+    def __init__(self, channel_graph: ChannelGraph, latency):
         self._channel_graph = channel_graph
+        self._latency = latency
         self._network = nx.MultiDiGraph()
         for src, dest, short_channel_id, channel in channel_graph.network.edges(data="channel", keys=True):
             oracle_channel = None
@@ -35,6 +36,10 @@ class OracleLightningNetwork(ChannelGraph):
     @property
     def network(self):
         return self._network
+    
+    @property
+    def latency(self):
+        return self._latency
 
     def send_onion(self, path, amt):
         """

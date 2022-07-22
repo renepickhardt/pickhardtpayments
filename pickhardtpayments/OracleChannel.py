@@ -17,8 +17,9 @@ class OracleChannel(Channel):
         self._in_flight = 0
         if actual_liquidity is None or actual_liquidity >= self.capacity or actual_liquidity < 0:
             # self._actual_liquidity = self.capacity
-            self._actual_liquidity = 0.5 * self.capacity
-            # self._actual_liquidity = random.randint(0, self.capacity)
+            # self._actual_liquidity = 0.5 * self.capacity
+            self._actual_liquidity = random.randint(0, self.capacity)
+            logging.debug("Oracle Channel initialised: {}".format(self.__str__()))
 
     def __str__(self):
         return super().__str__() + " actual Liquidity: {}".format(self.actual_liquidity)

@@ -4,7 +4,7 @@ SyncSimulatedPaymentSession.py
 The core module of the pickhardt payment project.
 An example payment is executed and statistics are run.
 """
-from .Payment import Payment
+from .Payment import Payment, MCFSolverError
 from .UncertaintyNetwork import UncertaintyNetwork
 from .OracleLightningNetwork import OracleLightningNetwork
 
@@ -102,11 +102,16 @@ class SyncSimulatedPaymentSession:
         # are too low or residual amounts decrease to slowly
         # TODO add 'expected value' to break condition for loop
         while payment.residual_amount > 0 and payment.pickhardt_payment_rounds <= 15:
+            payment.increment_pickhardt_payment_rounds()
             sub_payment = Payment(self.uncertainty_network, self.oracle_network, payment.sender, payment.receiver,
                                   payment.residual_amount, mu, base)
 
             # transfer to a min cost flow problem and run the solver. Attempts for payment are generated.
-            sub_payment.initiate()
+            try:
+                sub_payment.initiate()
+            except MCFSolverError as err:
+                logging.info(err)
+                break
 
             # Try to send amounts in attempts and registers if success or not
             # update our information regarding the in_flights in the UncertaintyNetwork and OracleNetwork

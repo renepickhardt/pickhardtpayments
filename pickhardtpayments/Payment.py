@@ -162,7 +162,6 @@ class Payment:
         """
         self._attempts.extend(sub_payment.attempts)
         self._residual_amount = sub_payment.residual_amount
-        self.increment_pickhardt_payment_rounds()
         logger.debug("remaining amount: {:>10,}".format(self.residual_amount))
 
     @property
@@ -643,8 +642,9 @@ class Payment:
         logger.info("Rounds of mcf-computations:\t{:3}".format(self.pickhardt_payment_rounds))
         logger.info("Number of attempts made:\t\t{:3}".format(len(self.attempts)))
         logger.info("Number of failed attempts:\t{:3}".format(len(list(self.filter_attempts(AttemptStatus.FAILED)))))
-        logger.info("Failure rate: {:4.2f}% ".format(
-            len(list(self.filter_attempts(AttemptStatus.FAILED))) * 100. / len(self.attempts)))
+        if len(self.attempts) > 0:
+            logger.info("Failure rate: {:4.2f}% ".format(
+              len(list(self.filter_attempts(AttemptStatus.FAILED))) * 100. / len(self.attempts)))
         logger.info("total Payment lifetime (including inefficient memory management): {:4.3f} sec".format(
             self.life_time))
         logger.info("Learnt entropy: {:5.2f} bits".format(self.uncertainty_network_entropy_delta))

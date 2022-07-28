@@ -68,7 +68,7 @@ class SyncSimulatedPaymentSession:
         self._uncertainty_network.activate_network_wide_uncertainty_reduction(
             n, self._oracle_network)
 
-    def pickhardt_pay(self, src, dest, amt=1, mu=1, base=DEFAULT_BASE_THRESHOLD):
+    def pickhardt_pay(self, src, dest, amt=1, mu=1, base=DEFAULT_BASE_THRESHOLD, loglevel="info"):
         """
         Conducts one payment with the pickhardt payment methodology.
 
@@ -90,8 +90,28 @@ class SyncSimulatedPaymentSession:
         are updated in the OracleNetwork on both channels.
         The AttemptStatus is consequently set to SETTLED, which triggers the update of the channels in the
         UncertaintyNetwork.
+
+        amt=1, mu=1, base=DEFAULT_BASE_THRESHOLD, loglevel="info"
+        :param src: node id of the sending node
+        :type: str
+        :param dest: node id of the receiving node
+        :type: str
+        :param amt: amount in satoshi to be sent
+        :type: int
+        :param mu: controls the balance between uncertainty cost and fees in the solver
+        :type: int
+        :param base: eliminates all channels with a base fee lower than `base`
+        :type: int
+        :param loglevel: determines verbosity,
+        :type: str
+
         """
         session_logger.info('*** new pickhardt payment ***')
+
+        numeric_level = logging.getLevelName(loglevel.upper())
+        if not isinstance(numeric_level, int):
+            raise ValueError('Invalid log level: %s' % loglevel)
+        session_logger.setLevel(numeric_level)
 
         # Initialise Payment
         payment = Payment(self.uncertainty_network, self.oracle_network, src, dest, amt, mu, base)
@@ -127,7 +147,7 @@ class SyncSimulatedPaymentSession:
         if payment.residual_amount == 0:
             payment.execute()
         else:
-            session_logger.info("Payment failed!")
+            session_logger.warning("Payment failed!")
             session_logger.info("residual amount: {:>10,} sats".format(payment.residual_amount))
 
         # Final Stats

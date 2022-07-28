@@ -346,15 +346,15 @@ class Payment:
         """
         computes the uncertainty network given our prior belief and prepares the min cost flow solver
 
-        This function can define a value for mu to control how heavily we combine the uncertainty cost and fees Also
+        This function can define a value for mu to control how heavily we combine the uncertainty cost and fees. Also
         the function supports only taking channels into account that don't charge a base_fee higher or equal to `base`
 
         returns the instantiated min_cost_flow object from the Google OR-lib that contains the piecewise linearized
         problem
 
-        :param mu:
+        :param mu: controls the balance between uncertainty cost and fees in the solver
         :type: int
-        :param base_fee:
+        :param base_fee: eliminates all channels with a base fee lower than `base_fee`
         :type: int
         """
         self._min_cost_flow = pywrapgraph.SimpleMinCostFlow()
@@ -457,7 +457,7 @@ class Payment:
                 break
             channel_path, used_flow = self._make_channel_path(G, path)
 
-            logger.info("(01) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};\tcond_cap: {:>10,}"
+            logger.debug("(01) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};\tcond_cap: {:>10,}"
                         ";\tflow: {:>10,}".format(channel_path[0].src[:4],
                                                   channel_path[0].dest[:4],
                                                   channel_path[0].min_liquidity,
@@ -527,7 +527,7 @@ class Payment:
                     uncertainty_channel.allocate_inflights(attempt.amount)
                 self._residual_amount -= attempt.amount
 
-            logger.info(
+            logger.debug(
                 "(03) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
                 "\tcond_cap: {:>10,}".format(
                     attempt.path[0].src[:4],
@@ -604,7 +604,7 @@ class Payment:
                 attempt.status = AttemptStatus.SETTLED
                 logger.debug("settled. Status changed to settled")
                 for channel in attempt.path:
-                    logger.info("(04) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
+                    logger.debug("(04) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
                                 "\tcond_cap: {:>10,}".format(channel.src[:4],
                                                              channel.dest[:4],
                                                              channel.min_liquidity,
@@ -614,7 +614,7 @@ class Payment:
                     return_channel = self.uncertainty_network.get_channel(channel.dest, channel.src,
                                                                           channel.short_channel_id)
                     if return_channel:
-                        logger.info("(04) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
+                        logger.debug("(04) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
                                     "\tcond_cap: {:>10,}".format(return_channel.src[:4],
                                                                  return_channel.dest[:4],
                                                                  return_channel.min_liquidity,

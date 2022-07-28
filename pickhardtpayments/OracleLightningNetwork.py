@@ -22,8 +22,7 @@ class OracleLightningNetwork(ChannelGraph):
                     capacity = channel.capacity
                     opposite_channel = self._network[dest][src][short_channel_id]["channel"]
                     opposite_liquidity = opposite_channel.actual_liquidity
-                    oracle_channel = OracleChannel(
-                        channel, capacity - opposite_liquidity)
+                    oracle_channel = OracleChannel(channel, capacity - opposite_liquidity)
 
             if oracle_channel is None:
                 oracle_channel = OracleChannel(channel)

@@ -1,6 +1,6 @@
 import networkx as nx
 import json
-from .Channel import Channel
+from Channel import Channel
 
 
 class ChannelGraph:

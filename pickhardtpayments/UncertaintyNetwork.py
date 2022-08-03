@@ -1,9 +1,10 @@
+import logging
+
+from Attempt import Attempt
 from .ChannelGraph import ChannelGraph
 from .UncertaintyChannel import UncertaintyChannel
 from .OracleLightningNetwork import OracleLightningNetwork
 
-
-from typing import List
 import networkx as nx
 
 DEFAULT_BASE_THRESHOLD = 0
@@ -21,32 +22,36 @@ class UncertaintyNetwork(ChannelGraph):
     Paths cannot be probed against the UncertaintyNetwork as it lacks an Oracle
     """
 
-    def __init__(self, channel_graph: ChannelGraph, base_threshold: int = DEFAULT_BASE_THRESHOLD):
+    def __init__(self, channel_graph: ChannelGraph, base_threshold: int = DEFAULT_BASE_THRESHOLD,
+                 prune_network: bool = True):
         self._channel_graph = nx.MultiDiGraph()
         for src, dest, keys, channel in channel_graph.network.edges(data="channel", keys=True):
-            oracle_channel = UncertaintyChannel(channel)
+            uncertainty_channel = UncertaintyChannel(channel)
             if channel.base_fee <= base_threshold:
-                self._channel_graph.add_edge(oracle_channel.src,
-                                             oracle_channel.dest,
-                                             key=oracle_channel.short_channel_id,
-                                             channel=oracle_channel)
+                self._channel_graph.add_edge(uncertainty_channel.src,
+                                             uncertainty_channel.dest,
+                                             key=uncertainty_channel.short_channel_id,
+                                             channel=uncertainty_channel)
+
+        self._prune = prune_network
 
     @property
     def network(self):
         return self._channel_graph
+
+    @property
+    def prune(self):
+        return self._prune
+
+    @prune.setter
+    def prune(self, value: bool):
+        self._prune = value
 
     def entropy(self):
         """
         computes to total uncertainty in the network summing the entropy of all channels
         """
         return sum(channel.entropy() for src, dest, channel in self.network.edges(data="channel"))
-
-    def allocate_amount_on_path(self, path: List[UncertaintyChannel], amt: int):
-        """
-        allocates `amt` to all channels of the path of `UncertaintyChannels`
-        """
-        for channel in path:
-            channel.allocate_amount(amt)
 
     def reset_uncertainty_network(self):
         """
@@ -100,15 +105,28 @@ class UncertaintyNetwork(ChannelGraph):
             key = "{}x{}".format(vals[0], vals[1])
             if key in ego_network:
                 l = arc.get_actual_liquidity()
-                arc.update_knowledge(l-1)
-                arc.update_knowledge(l+1)
+                arc.update_knowledge(l - 1)
+                arc.update_knowledge(l + 1)
                 # print(key,arc.entropy())
 
             if key in foaf_network:
                 arc.learn_n_bits(2)
                 l = arc.get_actual_liquidity()
-                arc.update_knowledge(l-1)
-                arc.update_knowledge(l+1)
+                arc.update_knowledge(l - 1)
+                arc.update_knowledge(l + 1)
                 # print(key, arc.entropy())
         print("channels with full knowledge: ", len(ego_network))
         print("channels with 2 Bits of less entropy: ", len(foaf_network))
+
+    def settle_attempt(self, attempt: Attempt):
+        """
+        receives a payment attempt and adjusts the balances of the UncertaintyChannels and its reverse channels
+        along the path.
+        """
+        for uncertainty_channel in attempt.path:
+            # no adjustment on minimum and maximum liquidity of channel and return channel necessary, because
+            # this has already been learnt in send_onion when updating knowledge after info about success of send_onion.
+
+            # remove in_flight amount from UncertaintyChannel
+            uncertainty_channel.allocate_inflights(-attempt.amount)
+        return 0

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 TODO: Insert version codename, and username of the contributor that named the release.
 -->
 ## [Unreleased]
+ - settle_payment is now settle_attempt, as this only settles one Attempt. 
+ - Information in UncertaintyNetwork is updated when AttemptStatus changes
 
 ## [0.1.0] - 2022-06-21
 ### Added

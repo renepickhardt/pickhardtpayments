@@ -1,7 +1,8 @@
-from typing import List
+import logging
 
-from .ChannelGraph import ChannelGraph
-from .OracleChannel import OracleChannel
+from Attempt import Attempt, AttemptStatus
+from ChannelGraph import ChannelGraph
+from OracleChannel import OracleChannel
 import networkx as nx
 
 DEFAULT_BASE_THRESHOLD = 0
@@ -21,8 +22,7 @@ class OracleLightningNetwork(ChannelGraph):
                     capacity = channel.capacity
                     opposite_channel = self._network[dest][src][short_channel_id]["channel"]
                     opposite_liquidity = opposite_channel.actual_liquidity
-                    oracle_channel = OracleChannel(
-                        channel, capacity - opposite_liquidity)
+                    oracle_channel = OracleChannel(channel, capacity - opposite_liquidity)
 
             if oracle_channel is None:
                 oracle_channel = OracleChannel(channel)
@@ -36,20 +36,35 @@ class OracleLightningNetwork(ChannelGraph):
     def network(self):
         return self._network
 
-    def send_onion(self, path, amt):
+    def allocate_amount_as_inflight_on_path(self, attempt: Attempt):
         """
+        allocates `amt` as in_flights to all channels of the path
+        """
+        for uncertainty_channel in attempt.path:
+            oracle_channel = self.get_channel(uncertainty_channel.src, uncertainty_channel.dest, uncertainty_channel.short_channel_id)
+            oracle_channel.in_flight += attempt.amount
 
+    def send_onion(self, attempt: Attempt):
+        """
         :rtype: object
         """
-        for channel in path:
-            oracle_channel = self.get_channel(
-                channel.src, channel.dest, channel.short_channel_id)
-            success_of_probe = oracle_channel.can_forward(
-                channel.in_flight + amt)
-            # print(channel,amt,success_of_probe)
-            channel.update_knowledge(amt, success_of_probe)
+        for uncertainty_channel in attempt.path:
+            oracle_channel = self.get_channel(uncertainty_channel.src, uncertainty_channel.dest, uncertainty_channel.short_channel_id)
+            # probing for current amount in addition to current in_flights in oracle network
+            success_of_probe = oracle_channel.can_forward(oracle_channel.in_flight + attempt.amount)
+            # updating knowledge about the probed amount (amount PLUS in_flight)
             if not success_of_probe:
-                return False, channel
+                logging.debug("failed channel {}-{} with actual liquidity of {:,} sats".format(
+                    oracle_channel.src, oracle_channel.dest, oracle_channel.actual_liquidity))
+                attempt.status = AttemptStatus.FAILED
+                logging.debug(f"Attempt status: {attempt}")
+                return False, uncertainty_channel
+
+        # setting AttemptStatus from PLANNED to INFLIGHT does not change in_flight amounts
+        attempt.status = AttemptStatus.INFLIGHT
+        # replicate HTLCs on the Channels
+        logging.debug("allocating {:,} ".format(attempt.amount))
+        self.allocate_amount_as_inflight_on_path(attempt)
         return True, None
 
     def theoretical_maximum_payable_amount(self, source: str, destination: str, base_fee: int = DEFAULT_BASE_THRESHOLD):
@@ -78,21 +93,25 @@ class OracleLightningNetwork(ChannelGraph):
         mincut, _ = nx.minimum_cut(test_network, source, destination)
         return mincut
 
-    def settle_payment(self, path: List[OracleChannel], payment_amount: int):
+    def settle_attempt(self, attempt: Attempt):
         """
-        receives a List of channels and payment amount and adjusts the balances of the channels along the path.
+        receives a payment attempt and adjusts the balances of the OracleChannels and its reverse channels
+        along the path.
 
-        settle_payment should only be called after all send_onions for a payment terminated successfully!
-        # TODO testing
+        settle_attempt should only be called after all send_onions for a payment terminated successfully!
         """
-        for channel in path:
+        for channel in attempt.path:
             settlement_channel = self.get_channel(channel.src, channel.dest, channel.short_channel_id)
             return_settlement_channel = self.get_channel(channel.dest, channel.src, channel.short_channel_id)
-            if settlement_channel.actual_liquidity > payment_amount:
+            if settlement_channel.actual_liquidity > attempt.amount:
                 # decrease channel balance in sending channel by amount
-                settlement_channel.actual_liquidity = settlement_channel.actual_liquidity - payment_amount
+                settlement_channel.actual_liquidity = settlement_channel.actual_liquidity - attempt.amount
+                # remove in_flight amount
+                settlement_channel.in_flight -= attempt.amount
                 # increase channel balance in the other direction by amount
-                return_settlement_channel.actual_liquidity = return_settlement_channel.actual_liquidity + payment_amount
+                if return_settlement_channel:
+                    return_settlement_channel.actual_liquidity = return_settlement_channel.actual_liquidity \
+                                                                 + attempt.amount
             else:
                 raise Exception("""Channel liquidity on Channel {} is lower than payment amount.
                     \nPayment cannot settle.""".format(channel.short_channel_id))

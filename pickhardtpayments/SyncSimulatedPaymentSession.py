@@ -1,7 +1,7 @@
 from .UncertaintyNetwork import UncertaintyNetwork
 from .OracleLightningNetwork import OracleLightningNetwork
 
-from ortools.graph import pywrapgraph
+from .MinCostFlow import MCFNetwork
 
 
 from typing import List
@@ -56,7 +56,7 @@ class SyncSimulatedPaymentSession():
 
         returns the instantiated min_cost_flow object from the google OR-lib that contains the piecewise linearized problem
         """
-        self._min_cost_flow = pywrapgraph.SimpleMinCostFlow()
+        self._min_cost_flow = MCFNetwork()
         self._arc_to_channel = {}
 
         for s, d, channel in self._uncertainty_network.network.edges(data="channel"):
@@ -73,10 +73,10 @@ class SyncSimulatedPaymentSession():
             cnt = 0
             # QUANTIZATION):
             for capacity, cost in channel.get_piecewise_linearized_costs(mu=mu):
-                index = self._min_cost_flow.AddArcWithCapacityAndUnitCost(self._mcf_id[s],
-                                                                          self._mcf_id[d],
-                                                                          capacity,
-                                                                          cost)
+                index = self._min_cost_flow.AddArc(self._mcf_id[s],
+                                                   self._mcf_id[d],
+                                                   capacity,
+                                                   cost)
                 self._arc_to_channel[index] = (s, d, channel, 0)
                 if self._prune_network and cnt > 1:
                     break
@@ -197,12 +197,10 @@ class SyncSimulatedPaymentSession():
 
         start = time.time()
         #print("solving mcf...")
-        status = self._min_cost_flow.Solve()
-
-        if status != self._min_cost_flow.OPTIMAL:
-            print('There was an issue with the min cost flow input.')
-            print(f'Status: {status}')
-            exit(1)
+        try:
+            self._min_cost_flow.Solve()
+        except:
+            raise BaseException('There was an issue with the min cost flow input.')
 
         paths = self._disect_flow_to_paths(src, dest)
         end = time.time()

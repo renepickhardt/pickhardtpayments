@@ -1,0 +1,36 @@
+\section{Introduction}
+
+Payments in the Lightning Network are performed along shortest path on the
+network that try to minimize the transfer fees.
+Because the participating nodes have incomplete information about the balance of
+the individual channels, it is not always possible to perform the payments along
+the shortest path, and the back-end of lightning has to work out alternative
+routes until one is found with enough liquidity to process the payment.
+
+\cite{pickhardt21} proposes an alternative algorithm for payments, by
+introducing the following novel ideas:
+\begin{enumerate}
+    \item Each payment can be routed through a combination of different paths,
+    in what is called a \emph{Mult-Part Payment} (MPP).
+    The transfer of money on each channel is bounded by the channel's capacity
+    (in one specific direction) and the sum of the inbound and outbound payments
+    for the nodes satisfy balance constraints, the MPP problem can be solved
+    with the algorithms that find maximum flows on a directed network.
+    \item The arcs of the network can be characterized by a probability
+    distribution function for the realization of the transfer (the value of the
+    flow on the arc that can be processed).
+    The probability of success of the MPP becomes the multiplication of the
+    probability of success of every non-trivial flow on the network.
+    \item By defining a new function of the MPP flow,
+    which is the negative logarithm of that probability of success,
+    one has that the probability of an MPP payment is maximized when this new
+    cost function is minimized. And since the logarithm of the product is the
+    sum of logarithms, this cost function is separable in the sum of the cost
+    for the individual costs of the flow through the arcs of the network.
+    Thus the problem of maximizing the probability of success of a MPP payment
+    becomes a Min Cost Flow problem with non-linear costs on arcs.
+    \item By assuming some constraint in the probability function of the arcs,
+    one can reduce to a particular class of problems for which the cost of the
+    flow is a convex function. For this class of problem efficient polynomial
+    algorithms are known.
+\end{enumerate}

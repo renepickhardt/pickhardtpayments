@@ -1,0 +1,48 @@
+\section{Timeline}
+
+    \subsection*{Before May 9}
+    Meet the mentors, discuss with them the proposed timeline,
+    deliverables and share ideas.
+
+    \subsection*{May 9 -- May 23}
+    Search in the literature for algorithms that solve the min-cost flow problem
+    with convex cost functions. 
+    Follow the bitcoin and lightning seminars.
+    
+    \subsection*{May 23 -- June 6}
+    Design of a standalone C++ library for solving the min-cost flow problem.
+    Implementation of a textbook efficient solution to the linear min-cost flow
+    problem, the \emph{Excess Scaling} algorithm described in 
+    \cite{ahuja1993network} section 7.9.
+    This linear MCF solver can be used to solve convex cost problems with a
+    tuneable linear approximation by decomposing the non-linear cost arcs into
+    several linear cost arcs.
+    Set up a simple set of unit tests for correctedness and CI for the library
+    repository.
+    
+    \subsection*{June 6 -- June 20}
+    Use the code to reproduce the results 
+    of Pickhardt's \emph{Payment Simulation} Jupyter Notebook.
+    Implementation of a textbook solution: the capacity scaling algorithm described in
+    \cite{ahuja1993network} section 14.5. This algorithm is a generalization of
+    the \emph{Excess Scaling}, hence it shouldn't be too difficult to adapt
+    the linear MCF already implemented to the general convex cost case.
+    
+    \subsection*{June 20 -- July 4}
+    Benchmark the canditate solutions.
+    Optimize the code to find a good tradeoff of runtimes and probability of
+    success.
+    Parallelization of the time critical routines.
+    
+    \subsection*{July 4 -- July 18}
+    Implementation of a small C-lightning plugin to demonstrate the use of the
+    library.
+    
+    \subsection*{July 18 -- August 1}
+    Document the library and buffer time for unfinished issues.
+    
+    \subsection*{August 1 -- August 15}
+    Preparation of the final report and draft the research article.
+    
+    \subsection*{August 15 -- August 22}
+    Submission of the final project report.

@@ -1,0 +1,47 @@
+\section{Proposal}
+
+% Based on the description of the problem in the introduction
+This Summer of Bitcoin project, proposes the design and implementation of a C++
+mini-library with no external dependencies for solving the min cost flow problem
+(MCF) with convex costs that can be used to optimize the probability of success
+of multipart payments in the Lightning Network.
+
+Some time of the project will be allocated to study of the state of the art of
+the problem. At the present we are aware of two algorithms that can be used to
+solve the MCF with convex costs.
+One that transforms approximates the cost function to a piecewise linear
+function and splits the arc into several linear cost arcs accordingly (section
+14.4 of \cite{ahuja1993network}).
+And the so called \emph{Capacity}
+algorithm described in section 14.5 of \cite{ahuja1993network},
+which is a generalization of a \emph{Excess Scaling} solver for the linear
+MCF problem.
+During the course of this project duration, we will evaluate which algorithm
+will be best suited for the problem domain.
+
+Parallelization of the algorithms will be considered and discussed during the
+development of the back-end.
+We will propose to use standard library tools for that purpose
+which are available in C++17.
+
+For the preparation of this Summer of Bitcoin project proposal, we have been
+working on a proof-of-concept MCF C++ library\footnote{%
+\url{https://github.com/Lagrang3/mincostflow}} publicly available on Github.
+The API of this MCF library permits the representation of a directed graph
+\texttt{digraph} in a space efficient data structure.
+It also allows for the computation 
+shortest paths on a weighted network using Dijsktra's and Breadth-First-Search
+algorithms, which serve as building blocks for flow solvers.
+There are two different back-ends for the solution of the Max Flow problem:
+using Edmond-Karp's \emph{Augmenting Paths} and Dinic's \emph{Push-Relabel}.
+Also these constitute building blocks for the Min Cost Flow solvers.
+The library contains a MCF solver based on the \emph{Successive Shortest Path}
+algorithm presented in section 9.7 on \cite{ahuja1993network}.
+
+In the library's respository we provide examples of applications that we have also
+used as test for correctedness and efficiency of our implementation.
+These examples actually solve two problems from the online judge Kattis:
+\texttt{maxflow}\footnote{\url{https://open.kattis.com/problems/maxflow}}
+and
+\texttt{mincostmaxflow}\footnote{\url{https://open.kattis.com/problems/mincostmaxflow}},
+and they do pass the test cases within the time and memory constraints.

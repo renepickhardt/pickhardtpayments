@@ -1,0 +1,4 @@
+[submodule "subprojects/MinCostFlow"]
+	path = subprojects/MinCostFlow
+	url = https://github.com/Lagrang3/mincostflow.git
+	branch = master

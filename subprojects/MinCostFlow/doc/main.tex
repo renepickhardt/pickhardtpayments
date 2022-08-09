@@ -1,0 +1,47 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{bold-extra}
+
+\hypersetup{
+    colorlinks=false,
+    hidelinks=true
+}
+\bibliographystyle{plain} % FIXME: styles are not found
+
+\newcommand{\Ring}{\mathcal{R}}
+\newcommand{\Order}{\mathcal{O}}
+\newcommand{\Complex}{\mathbb{C}}
+\newcommand{\Real}{\mathbb{R}}
+\newcommand{\Integer}{\mathbb{Z}}
+
+\newcommand{\comment}[1]{\textrm{\textit{#1}}}
+\newcommand{\function}[1]{\textbf{#1}}
+\newcommand{\variable}[1]{\textit{#1}}
+
+\title{Summer of Bitcoin 2022:\\ Efficient Min Convex Cost Flow Solver for Lightning Network Payment Delivery}
+\author{Eduardo Quintana Miranda}
+
+
+\begin{document}
+
+\maketitle
+
+%\tableofcontents
+\input intro
+\input proposal
+\input schedule
+    
+\bibliography{biblio}
+
+\appendix
+\input info
+
+\end{document}

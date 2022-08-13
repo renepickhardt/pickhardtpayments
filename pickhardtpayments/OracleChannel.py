@@ -19,7 +19,7 @@ class OracleChannel(Channel):
             # self._actual_liquidity = self.capacity
             # self._actual_liquidity = 0.5 * self.capacity
             self._actual_liquidity = random.randint(0, self.capacity)
-            logging.debug("Oracle Channel initialised: {}".format(self.__str__()))
+            logging.debug("Oracle Channel initialised with initial actual liquidity: {:>8,}".format(self.actual_liquidity))
 
     def __str__(self):
         return super().__str__() + " actual Liquidity: {}".format(self.actual_liquidity)

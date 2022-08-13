@@ -122,11 +122,22 @@ class UncertaintyNetwork(ChannelGraph):
         """
         receives a payment attempt and adjusts the balances of the UncertaintyChannels and its reverse channels
         along the path.
+
+        #TODO: I'm not really happy with the naming of the method, actually. because it's not really a settlement,
+         but more like registering it, allocating HTLCs. (seb)
+
         """
         for uncertainty_channel in attempt.path:
-            # no adjustment on minimum and maximum liquidity of channel and return channel necessary, because
-            # this has already been learnt in send_onion when updating knowledge after info about success of send_onion.
-
             # remove in_flight amount from UncertaintyChannel
             uncertainty_channel.allocate_inflights(-attempt.amount)
+            logging.debug(f"inflights removed from uncertainty channel - {attempt.amount} sats.")
+            # adjustment of minimum and maximum liquidity in UncertaitnyChannels not necessary,
+            # knowledge has already been captured.
+
+            # return_channel = self.get_channel(uncertainty_channel.dest,
+            #                                   uncertainty_channel.src,
+            #                                   uncertainty_channel.short_channel_id)
+            # return_channel.min_liquidity = min(return_channel.min_liquidity + attempt.amount, return_channel.capacity)
+            # return_channel.max_liquidity = min(return_channel.max_liquidity + attempt.amount, return_channel.capacity)
+
         return 0

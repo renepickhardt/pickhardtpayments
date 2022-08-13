@@ -46,7 +46,19 @@ class OracleLightningNetwork(ChannelGraph):
 
     def send_onion(self, attempt: Attempt):
         """
-        :rtype: object
+        Probes the oracle network if the amount of satoshis for this attempt can be sent through the given path in
+        the attempt.
+        If successful, then inflight amounts are placed on the respective oracle channels as well as uncertainty
+        channels, and the Attempt is set to INFLIGHT.
+        If not successful, then the status of the Attempt is set to FAILED and the failing channel is returned
+
+        :param attempt: the attempt that is probed
+        :type: Attempt
+
+        :return: did sending the onion succeed?
+        :rtype: Boolean
+        :return: if sending the onion failed, at which channel did it fail
+        :rtype: UncertaintyChannel or None
         """
         for uncertainty_channel in attempt.path:
             oracle_channel = self.get_channel(uncertainty_channel.src, uncertainty_channel.dest, uncertainty_channel.short_channel_id)
@@ -62,9 +74,13 @@ class OracleLightningNetwork(ChannelGraph):
 
         # setting AttemptStatus from PLANNED to INFLIGHT does not change in_flight amounts
         attempt.status = AttemptStatus.INFLIGHT
-        # replicate HTLCs on the Channels
+        # replicate HTLCs on the OracleChannels
         logging.debug("allocating {:,} ".format(attempt.amount))
         self.allocate_amount_as_inflight_on_path(attempt)
+        # replicate HTLCs on the UncertaintyChannels
+        for uncertainty_channel in attempt.path:
+            uncertainty_channel.allocate_inflights(attempt.amount)
+
         return True, None
 
     def theoretical_maximum_payable_amount(self, source: str, destination: str, base_fee: int = DEFAULT_BASE_THRESHOLD):

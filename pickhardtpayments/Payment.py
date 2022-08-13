@@ -507,24 +507,21 @@ class Payment:
         for attempt in self.filter_attempts(AttemptStatus.PLANNED):
             # TODO: add callback, eventloop. or with future, spawning threads.
 
-            # probe channel in Oracle Network
+            # probe channel in Oracle Network and leave inflights if successful
             success_of_probe, erring_channel = self._oracle_network.send_onion(attempt)
             logger.debug(f"attempting payments successful: {success_of_probe} for {attempt}")
 
-            # TODO: learn: adjust knowledge about channels
             for uncertainty_channel in iter(attempt.path):
                 return_channel = self.uncertainty_network.get_channel(uncertainty_channel.dest,
                                                                       uncertainty_channel.src,
                                                                       uncertainty_channel.short_channel_id)
                 if uncertainty_channel == erring_channel:
-                    uncertainty_channel.update_knowledge(attempt, return_channel)
+                    uncertainty_channel.update_knowledge(attempt.amount, return_channel, False)
                     break
-                uncertainty_channel.update_knowledge(attempt, return_channel)
+                uncertainty_channel.update_knowledge(attempt.amount, return_channel, True)
 
-            # when successful, place amount as additional in_flight on UncertaintyChannels along path
+                # when successful, place amount as additional in_flight on UncertaintyChannels along path
             if success_of_probe:
-                for uncertainty_channel in attempt.path:
-                    uncertainty_channel.allocate_inflights(attempt.amount)
                 self._residual_amount -= attempt.amount
 
             logger.debug(
@@ -639,6 +636,7 @@ class Payment:
         """
         logger.info("SUMMARY:")
         logger.info("========")
+        logger.info("Payment amount:\t{:>8,}".format(self.total_amount))
         logger.info("Rounds of mcf-computations:\t{:3}".format(self.pickhardt_payment_rounds))
         logger.info("Number of attempts made:\t\t{:3}".format(len(self.attempts)))
         logger.info("Number of failed attempts:\t{:3}".format(len(list(self.filter_attempts(AttemptStatus.FAILED)))))

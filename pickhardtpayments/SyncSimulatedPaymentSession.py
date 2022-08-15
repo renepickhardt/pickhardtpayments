@@ -1,7 +1,7 @@
 from .UncertaintyNetwork import UncertaintyNetwork
 from .OracleLightningNetwork import OracleLightningNetwork
 
-from .MinCostFlow import MCFNetwork
+from MinCostFlow import MCFNetwork
 
 
 from typing import List
@@ -72,9 +72,14 @@ class SyncSimulatedPaymentSession():
                 continue
             cnt = 0
             # QUANTIZATION):
-            for capacity, cost in channel.get_piecewise_linearized_costs(mu=mu):
-                index = self._min_cost_flow.AddArc(self._mcf_id[s],
-                                                   self._mcf_id[d],
+            direction = 0
+            if s>d:
+                direction = 1
+            for part,(capacity, cost) in enumerate(channel.get_piecewise_linearized_costs(mu=mu)):
+                index = self._min_cost_flow.AddArc(s,
+                                                   d,
+                                                   channel.short_channel_id,
+                                                   direction + part*2,
                                                    capacity,
                                                    cost)
                 self._arc_to_channel[index] = (s, d, channel, 0)
@@ -84,15 +89,15 @@ class SyncSimulatedPaymentSession():
 
         # Add node supply to 0 for all nodes
         for i in self._uncertainty_network.network.nodes():
-            self._min_cost_flow.SetNodeSupply(self._mcf_id[i], 0)
+            self._min_cost_flow.SetNodeSupply(i, 0)
 
         # add amount to sending node
         self._min_cost_flow.SetNodeSupply(
-            self._mcf_id[src], int(amt))  # /QUANTIZATION))
+            src, int(amt))  # /QUANTIZATION))
 
         # add -amount to recipient nods
         self._min_cost_flow.SetNodeSupply(
-            self._mcf_id[dest], -int(amt))  # /QUANTIZATION))
+            dest, -int(amt))  # /QUANTIZATION))
 
     def _next_hop(self, path):
         """

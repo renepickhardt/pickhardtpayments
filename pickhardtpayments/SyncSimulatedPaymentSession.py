@@ -1,5 +1,6 @@
 from .UncertaintyNetwork import UncertaintyNetwork
 from .OracleLightningNetwork import OracleLightningNetwork
+from .UncertaintyChannel import DEFAULT_N
 
 from MinCostFlow import MCFNetwork
 
@@ -31,23 +32,76 @@ class SyncSimulatedPaymentSession():
         self._oracle = oracle
         self._uncertainty_network = uncertainty_network
         self._prune_network = prune_network
-        self._prepare_integer_indices_for_nodes()
 
-    def _prepare_integer_indices_for_nodes(self):
-        """
-        necessary for the OR-lib by google and the min cost flow solver
+    def _mcf_demands(self,src,dest,amt: int = 1):
+        # add amount to sending node
+        self._min_cost_flow.SetNodeSupply(
+            src, int(amt))  # /QUANTIZATION))
 
-
-        let's initialize the look up tables for node_ids to integers from [0,...,#number of nodes]
-        this is necessary because of the API of the Google Operations Research min cost flow solver
-        """
-        self._mcf_id = {}
-        self._node_key = {}
-        for k, node_id in enumerate(self._uncertainty_network.network.nodes()):
-            self._mcf_id[node_id] = k
-            self._node_key[k] = node_id
-
-    def _prepare_mcf_solver(self, src, dest, amt: int = 1, mu: int = 100_000_000, base_fee: int = DEFAULT_BASE_THRESHOLD):
+        # add -amount to recipient nods
+        self._min_cost_flow.SetNodeSupply(
+            dest, -int(amt))  # /QUANTIZATION))
+    
+    def _mcf_channel_encode_part(self,channel,part: int=0):
+        direction = 0
+        if channel.src>channel.dest:
+            direction = 1
+        return direction + part*2
+    
+    def _mcf_good_channel(self,channel,mu: int = 100_000_000, base_fee: int = DEFAULT_BASE_THRESHOLD):
+        # ignore channels with too large base fee
+        if channel.base_fee > base_fee:
+            return False
+        # FIXME: Remove Magic Number for pruning
+        # Prune channels away thay have too low success probability! This is a huge runtime boost
+        # However the pruning would be much better to work on quantiles of normalized cost
+        # So as soon as we have better Scaling, Centralization and feature engineering we can
+        # probably have a more focused pruning
+        if self._prune_network and channel.success_probability(250_000) < 0.9:
+            return False
+        return True
+    
+    def _mcf_delete_channel(self,channel):
+        for part in range(DEFAULT_N):
+            index = self._min_cost_flow.RemoveArc(channel.short_channel_id,
+                                                  self._mcf_channel_encode_part(channel,part))
+            self._arc_to_channel.pop(index)
+    
+    def _mcf_update_channel(self,channel,mu: int = 100_000_000, base_fee: int = DEFAULT_BASE_THRESHOLD):
+        if not self._mcf_good_channel(channel,mu,base_fee):
+            self._mcf_delete_channel(channel)
+            return
+        # QUANTIZATION):
+        for part,(capacity, cost) in enumerate(channel.get_piecewise_linearized_costs(mu=mu)):
+            self._min_cost_flow.UpdateArc(channel.short_channel_id,
+                                          self._mcf_channel_encode_part(channel,part),
+                                          capacity,
+                                          cost)
+    
+    def _mcf_update_used_channels(self,payments,mu: int = 100_000_000, base_fee: int = DEFAULT_BASE_THRESHOLD):
+        for attempt in payments.values():
+            path = attempt['path']
+            for channel in path:
+                self._mcf_update_channel(channel,mu,base_fee)
+    
+    def _mcf_new_arc(self,channel,mu: int = 100_000_000, base_fee: int = DEFAULT_BASE_THRESHOLD):
+        if not self._mcf_good_channel(channel,mu,base_fee):
+            return
+        cnt = 0
+        # QUANTIZATION):
+        for part,(capacity, cost) in enumerate(channel.get_piecewise_linearized_costs(mu=mu)):
+            index = self._min_cost_flow.AddArc(channel.src,
+                                               channel.dest,
+                                               channel.short_channel_id,
+                                               self._mcf_channel_encode_part(channel,part),
+                                               capacity,
+                                               cost)
+            self._arc_to_channel[index] = (channel.src, channel.dest, channel, 0)
+            if self._prune_network and cnt > 1:
+                break
+            cnt += 1
+    
+    def _prepare_mcf_solver(self,mu: int = 100_000_000, base_fee: int = DEFAULT_BASE_THRESHOLD):
         """
         computes the uncertainty network given our prior belief and prepares the min cost flow solver
 
@@ -60,44 +114,11 @@ class SyncSimulatedPaymentSession():
         self._arc_to_channel = {}
 
         for s, d, channel in self._uncertainty_network.network.edges(data="channel"):
-            # ignore channels with too large base fee
-            if channel.base_fee > base_fee:
-                continue
-            # FIXME: Remove Magic Number for pruning
-            # Prune channels away thay have too low success probability! This is a huge runtime boost
-            # However the pruning would be much better to work on quantiles of normalized cost
-            # So as soon as we have better Scaling, Centralization and feature engineering we can
-            # probably have a more focused pruning
-            if self._prune_network and channel.success_probability(250_000) < 0.9:
-                continue
-            cnt = 0
-            # QUANTIZATION):
-            direction = 0
-            if s>d:
-                direction = 1
-            for part,(capacity, cost) in enumerate(channel.get_piecewise_linearized_costs(mu=mu)):
-                index = self._min_cost_flow.AddArc(s,
-                                                   d,
-                                                   channel.short_channel_id,
-                                                   direction + part*2,
-                                                   capacity,
-                                                   cost)
-                self._arc_to_channel[index] = (s, d, channel, 0)
-                if self._prune_network and cnt > 1:
-                    break
-                cnt += 1
+            self._mcf_new_arc(channel,mu,base_fee)
 
         # Add node supply to 0 for all nodes
         for i in self._uncertainty_network.network.nodes():
             self._min_cost_flow.SetNodeSupply(i, 0)
-
-        # add amount to sending node
-        self._min_cost_flow.SetNodeSupply(
-            src, int(amt))  # /QUANTIZATION))
-
-        # add -amount to recipient nods
-        self._min_cost_flow.SetNodeSupply(
-            dest, -int(amt))  # /QUANTIZATION))
 
     def _next_hop(self, path):
         """
@@ -148,11 +169,15 @@ class SyncSimulatedPaymentSession():
 
         # first collect all linearized edges which are assigned a non zero flow put them into a networkx graph
         G = nx.MultiDiGraph()
-        for i in range(self._min_cost_flow.NumArcs()):
-            flow = self._min_cost_flow.Flow(i)  # *QUANTIZATION
-            if flow == 0:
-                continue
-
+        
+        #for i in range(self._min_cost_flow.NumArcs()):
+        
+        index_list, flow_list = self._min_cost_flow.FlowArray()
+        for i,flow in zip(index_list,flow_list):
+            #flow = self._min_cost_flow.Flow(i)  # *QUANTIZATION
+            #if flow == 0:
+            #    continue
+            # print(i,flow)
             src, dest, channel, _ = self._arc_to_channel[i]
             if G.has_edge(src, dest):
                 if channel.short_channel_id in G[src][dest]:
@@ -198,7 +223,9 @@ class SyncSimulatedPaymentSession():
         """
 
         # First we prepare the min cost flow by getting arcs from the uncertainty network
-        self._prepare_mcf_solver(src, dest, amt, mu, base)
+        # self._prepare_mcf_solver(mu, base)
+        
+        self._mcf_demands(src,dest,amt)
 
         start = time.time()
         #print("solving mcf...")
@@ -347,6 +374,8 @@ class SyncSimulatedPaymentSession():
         number_number_of_onions = 0
         total_number_failed_paths = 0
 
+        self._prepare_mcf_solver(mu,base)
+
         # This is the main payment loop. It is currently blocking and synchronous but may be
         # implemented in a concurrent way. Also we stop after 10 rounds which is pretty arbitrary
         # a better stop criteria would be if we compute infeasable flows or if the probabilities
@@ -364,6 +393,8 @@ class SyncSimulatedPaymentSession():
 
             # matke attempts and update our information about the UncertaintyNetwork
             self._attempt_payments(payments)
+            
+            self._mcf_update_used_channels(payments,mu,base)
 
             # run some simple statistics and depict them
             amt, paid_fees, num_paths, number_failed_paths = self._evaluate_attempts(

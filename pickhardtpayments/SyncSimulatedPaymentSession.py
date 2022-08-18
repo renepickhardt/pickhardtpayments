@@ -2,7 +2,7 @@ from .UncertaintyNetwork import UncertaintyNetwork
 from .OracleLightningNetwork import OracleLightningNetwork
 from .UncertaintyChannel import DEFAULT_N
 
-from MinCostFlow import MCFNetwork
+from MinCostFlow import MCFNetwork, simpleMCFNetwork
 
 
 from typing import List
@@ -110,7 +110,9 @@ class SyncSimulatedPaymentSession():
 
         returns the instantiated min_cost_flow object from the google OR-lib that contains the piecewise linearized problem
         """
-        self._min_cost_flow = MCFNetwork()
+        start = time.time()
+        # self._min_cost_flow = MCFNetwork()
+        self._min_cost_flow = simpleMCFNetwork()
         self._arc_to_channel = {}
 
         for s, d, channel in self._uncertainty_network.network.edges(data="channel"):
@@ -119,6 +121,8 @@ class SyncSimulatedPaymentSession():
         # Add node supply to 0 for all nodes
         for i in self._uncertainty_network.network.nodes():
             self._min_cost_flow.SetNodeSupply(i, 0)
+        end = time.time()
+        return end-start
 
     def _next_hop(self, path):
         """
@@ -374,7 +378,8 @@ class SyncSimulatedPaymentSession():
         number_number_of_onions = 0
         total_number_failed_paths = 0
 
-        self._prepare_mcf_solver(mu,base)
+        total_mcf_time = 0
+        time_prepare_mcf = self._prepare_mcf_solver(mu,base)
 
         # This is the main payment loop. It is currently blocking and synchronous but may be
         # implemented in a concurrent way. Also we stop after 10 rounds which is pretty arbitrary
@@ -387,7 +392,7 @@ class SyncSimulatedPaymentSession():
             # transfer to a min cost flow problem and rund the solver
             paths, runtime = self._generate_candidate_paths(
                 src, dest, amt, mu, base)
-
+            total_mcf_time += runtime
             # compute some statistics about candidate paths
             payments = self._estimate_payment_statistics(paths)
 
@@ -415,6 +420,8 @@ class SyncSimulatedPaymentSession():
         print("Number of failed onions: ", total_number_failed_paths)
         print("Failure rate: {:4.2f}% ".format(
             total_number_failed_paths*100./number_number_of_onions))
+        print("runtime for graph initialization: {:4.3f} sec".format(time_prepare_mcf))
+        print("total runtime for MCF solve: {:4.3f} sec".format(total_mcf_time))
         print("total runtime (including inefficient memory managment): {:4.3f} sec".format(
             end-start))
         print("Learnt entropy: {:5.2f} bits".format(entropy_start-entropy_end))

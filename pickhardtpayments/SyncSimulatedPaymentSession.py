@@ -2,7 +2,7 @@ from .UncertaintyNetwork import UncertaintyNetwork
 from .OracleLightningNetwork import OracleLightningNetwork
 from .UncertaintyChannel import DEFAULT_N
 
-from MinCostFlow import MCFNetwork, simpleMCFNetwork
+from MinCostFlow import MCFAugmentingPaths, MCFCostScaling
 
 
 from typing import List
@@ -111,8 +111,8 @@ class SyncSimulatedPaymentSession():
         returns the instantiated min_cost_flow object from the google OR-lib that contains the piecewise linearized problem
         """
         start = time.time()
-        self._min_cost_flow = MCFNetwork()
-        # self._min_cost_flow = simpleMCFNetwork()
+        self._min_cost_flow = MCFAugmentingPaths()
+        # self._min_cost_flow = MCFCostScaling()
         self._arc_to_channel = {}
 
         for s, d, channel in self._uncertainty_network.network.edges(data="channel"):

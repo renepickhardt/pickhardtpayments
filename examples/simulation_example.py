@@ -29,8 +29,8 @@ RENE = "03efccf2c383d7bf340da9a3f02e2c23104a0e4fe8ac1a880c8e2dc92fbdacd9df"
 C_OTTO = "027ce055380348d7812d2ae7745701c9f93e70c1adeb2657f053f91df4f2843c71"
 tested_amount = 6_000_000  # 10 million sats
 
-payment_session.pickhardt_pay(RENE, C_OTTO, tested_amount, mu=0, base=0)
+payment_session.pickhardt_pay(RENE, C_OTTO, tested_amount, mu=0, base=0, loglevel="debug")
 # payment_session.pickhardt_pay("A", "D", 10000, mu=0, base=0, loglevel="debug")
 # payment_session.forget_information()
-payment_session.pickhardt_pay(RENE, C_OTTO, tested_amount, mu=0, base=0)
+payment_session.pickhardt_pay(RENE, C_OTTO, tested_amount, mu=0, base=0, loglevel="debug")
 # payment_session.pickhardt_pay("A", "D", 150000, mu=0, base=0, loglevel="debug")

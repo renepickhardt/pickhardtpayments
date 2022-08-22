@@ -15,11 +15,12 @@ class OracleChannel(Channel):
         super().__init__(channel.cln_jsn)
         self._actual_liquidity = actual_liquidity
         self._in_flight = 0
+        seed = 64
+        random.seed(seed)
         if actual_liquidity is None or actual_liquidity >= self.capacity or actual_liquidity < 0:
-            # self._actual_liquidity = self.capacity
             # self._actual_liquidity = 0.5 * self.capacity
+            logging.debug("Oracle Channels initialised with seed: {}".format(seed))
             self._actual_liquidity = random.randint(0, self.capacity)
-            logging.debug("Oracle Channel initialised with initial actual liquidity: {:>8,}".format(self.actual_liquidity))
 
     def __str__(self):
         return super().__str__() + " actual Liquidity: {}".format(self.actual_liquidity)

@@ -121,7 +121,7 @@ class SyncSimulatedPaymentSession:
         # a better stop criteria would be if we compute infeasible flows or if the probabilities
         # are too low or residual amounts decrease to slowly
         # TODO add 'expected value' to break condition for loop
-        while payment.residual_amount > 0 and payment.pickhardt_payment_rounds <= 10:
+        while payment.residual_amount > 0 and payment.pickhardt_payment_rounds <= 15:
             payment.increment_pickhardt_payment_rounds()
             sub_payment = Payment(self.uncertainty_network, self.oracle_network, payment.sender, payment.receiver,
                                   payment.residual_amount, mu, base)

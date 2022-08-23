@@ -1,4 +1,5 @@
 import logging
+import random
 
 from Attempt import Attempt, AttemptStatus
 from ChannelGraph import ChannelGraph
@@ -13,6 +14,11 @@ class OracleLightningNetwork(ChannelGraph):
     def __init__(self, channel_graph: ChannelGraph):
         self._channel_graph = channel_graph
         self._network = nx.MultiDiGraph()
+
+        seed = 1337
+        random.seed(seed)
+        logging.debug("Oracle Channels initialised with seed: {}".format(seed))
+
         for src, dest, short_channel_id, channel in channel_graph.network.edges(data="channel", keys=True):
             oracle_channel = None
 
@@ -67,7 +73,7 @@ class OracleLightningNetwork(ChannelGraph):
             # updating knowledge about the probed amount (amount PLUS in_flight)
             if not success_of_probe:
                 logging.debug("failed channel {}-{} with actual liquidity of {:,} sats".format(
-                    oracle_channel.src, oracle_channel.dest, oracle_channel.actual_liquidity))
+                    oracle_channel.src[:6], oracle_channel.dest[:6], oracle_channel.actual_liquidity))
                 attempt.status = AttemptStatus.FAILED
                 logging.debug(f"Attempt status: {attempt}")
                 return False, uncertainty_channel

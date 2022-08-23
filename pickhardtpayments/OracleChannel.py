@@ -15,11 +15,8 @@ class OracleChannel(Channel):
         super().__init__(channel.cln_jsn)
         self._actual_liquidity = actual_liquidity
         self._in_flight = 0
-        seed = 64
-        random.seed(seed)
         if actual_liquidity is None or actual_liquidity >= self.capacity or actual_liquidity < 0:
             # self._actual_liquidity = 0.5 * self.capacity
-            logging.debug("Oracle Channels initialised with seed: {}".format(seed))
             self._actual_liquidity = random.randint(0, self.capacity)
 
     def __str__(self):
@@ -68,7 +65,7 @@ class OracleChannel(Channel):
         """
         if 0 <= in_flight_amt <= self.capacity:
             self._in_flight = in_flight_amt
-            logging.debug("in_flight on {}-{} now {:,} ".format(self.src, self.dest, in_flight_amt))
+            logging.debug("in_flight on {}-{} now {:,} ".format(self.src[:6], self.dest[:6], in_flight_amt))
         else:
             raise ValueError(f"inflight amount for channel {self.short_channel_id} cannot be set. "
                              f"Amount {in_flight_amt} is negative or higher than capacity")

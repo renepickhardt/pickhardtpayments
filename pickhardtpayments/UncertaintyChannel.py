@@ -389,14 +389,14 @@ class UncertaintyChannel(Channel):
         if probing_successful:
             self.min_liquidity = max(self.min_liquidity - amount, 0)
             self.max_liquidity = self.max_liquidity - self.in_flight
-            logging.debug(f"channel ({self.src}-{self.dest}): placed {self.min_liquidity} as min "
+            logging.debug(f"channel ({self.src[:6]}-{self.dest[:6]}):\t\t\tplaced {self.min_liquidity} as min "
                           f"and {self.max_liquidity} as max liquidity, while {self.in_flight} is inflight")
             if return_channel:
                 return_channel.min_liquidity = max(return_channel.min_liquidity,
                                                    self.in_flight,
                                                    self.capacity - self.max_liquidity)
                 return_channel.max_liquidity = return_channel.capacity - self.min_liquidity
-                logging.debug(f"return channel ({return_channel.src}-{return_channel.dest}): min_liquidity "
+                logging.debug(f"return channel ({return_channel.src[:6]}-{return_channel.dest[:6]}):\tmin_liquidity "
                               f"{return_channel.min_liquidity}, max_liquidity {return_channel.max_liquidity}")
             else:
                 logging.debug(f"no return channel in UncertaintyNetwork for {self.short_channel_id}")

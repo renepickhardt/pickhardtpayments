@@ -330,8 +330,8 @@ class Payment:
             logger.debug("path no. {} for {:,} sats".format(count, attempt.amount))
             for channel in attempt.path:
                 logger.debug("(02) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};\t"
-                             "cond_cap: {:>10,}".format(channel.src[:4],
-                                                        channel.dest[:4],
+                             "cond_cap: {:>10,}".format(channel.src[:6],
+                                                        channel.dest[:6],
                                                         channel.min_liquidity,
                                                         channel.max_liquidity,
                                                         channel.in_flight,
@@ -458,8 +458,8 @@ class Payment:
             channel_path, used_flow = self._make_channel_path(G, path)
 
             logger.debug("(01) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};\tcond_cap: {:>10,}"
-                        ";\tflow: {:>10,}".format(channel_path[0].src[:4],
-                                                  channel_path[0].dest[:4],
+                        ";\tflow: {:>10,}".format(channel_path[0].src[:6],
+                                                  channel_path[0].dest[:6],
                                                   channel_path[0].min_liquidity,
                                                   channel_path[0].max_liquidity,
                                                   channel_path[0].in_flight,
@@ -527,8 +527,8 @@ class Payment:
             logger.debug(
                 "(03) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
                 "\tcond_cap: {:>10,}".format(
-                    attempt.path[0].src[:4],
-                    attempt.path[0].dest[:4],
+                    attempt.path[0].src[:6],
+                    attempt.path[0].dest[:6],
                     attempt.path[0].min_liquidity,
                     attempt.path[0].max_liquidity,
                     attempt.path[0].in_flight,
@@ -602,8 +602,8 @@ class Payment:
                 logger.debug("settled. Status changed to settled")
                 for channel in attempt.path:
                     logger.debug("(04) {}-{} Uncertainty Range:\t\t[{:>10,} ; {:>10,}]\t\tinflight {:>10,};"
-                                "\tcond_cap: {:>10,}".format(channel.src[:4],
-                                                             channel.dest[:4],
+                                "\tcond_cap: {:>10,}".format(channel.src[:6],
+                                                             channel.dest[:6],
                                                              channel.min_liquidity,
                                                              channel.max_liquidity,
                                                              channel.in_flight,

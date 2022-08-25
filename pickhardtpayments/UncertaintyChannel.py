@@ -13,19 +13,19 @@ class UncertaintyChannel(Channel):
     UncertaintyNetwork.
 
     Since we optimize for reliability via a probability estimate for liquidity that is based
-    on the capacity of the channel the class contains the `capacity` as seen in the funding tx output.
+    on the capacity of the channel, the class contains the `capacity` as seen in the funding tx output.
 
-    As we also optimize for fees and want to be able to compute the fees of a flow the classe
+    As we also optimize for fees and want to be able to compute the fees of a flow ,the class
     contains information for the feerate (`ppm`) and the base_fee (`base`). 
 
     Most importantly the class stores our belief about the liquidity information of a channel.
     This is done by reducing the uncertainty interval from [0,`capacity`] to 
     [`min_liquidity`, `max_liquidity`].
-    Additionally we need to know how many sats we currently have allocated via outstanding onions
+    Additionally, we need to know how many sats we currently have allocated via outstanding onions
     to the channel which is stored in `inflight`.
 
     The most important API call is the `get_piecewise_linearized_costs` function that computes the
-    pieceweise linearized cost for a channel rising from uncertainty as well as routing fees.
+    piecewise linearized cost for a channel rising from uncertainty as well as routing fees.
     """
 
     TOTAL_NUMBER_OF_SATS = 21_000_000 * 100_000_000
@@ -81,7 +81,7 @@ class UncertaintyChannel(Channel):
 
     def allocate_amount(self, amt: int):
         """
-        assign or remove ammount that is assigned to be `in_flight`.
+        assign or remove amount that is assigned to be `in_flight`.
         """
         self.in_flight += amt
         if self.in_flight < 0:
@@ -91,7 +91,7 @@ class UncertaintyChannel(Channel):
     # FIXME: store timestamps when using setters so that we know when we learnt our belief
     def forget_information(self):
         """
-        resets the information that we belief to have about the channel. 
+        resets the information that we believe to have about the channel. 
         """
         self.min_liquidity = 0
         self.max_liquidity = self.capacity
@@ -263,7 +263,7 @@ class UncertaintyChannel(Channel):
         """
         updates our knowledge about the channel if we tried to probe it for amount `amt`
 
-        This API works ony if we have an Oracle that allows to ask the actual liquidity of a channel
+        This API works only if we have an Oracle that allows to ask the actual liquidity of a channel
         In mainnet Lightning our oracle will not work on a per_channel level. This will change the data
         flow. Here for simplicity of the simulation we make use of the Oracle on a per channel level
         """

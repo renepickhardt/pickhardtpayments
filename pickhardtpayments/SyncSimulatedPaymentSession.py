@@ -108,10 +108,9 @@ class SyncSimulatedPaymentSession:
                                           capacity,
                                           cost)
     
-    def _mcf_update_used_channels(self,payments):
-        for attempt in payments.values():
-            path = attempt['path']
-            for channel in path:
+    def _mcf_update_used_channels(self, attempts: List[Attempt]):
+        for attempt in attempts:
+            for channel in attempt.path:
                 self._mcf_update_channel(channel)
     
     def _mcf_new_arc(self,channel):
@@ -419,6 +418,7 @@ class SyncSimulatedPaymentSession:
             # make attempts, try to send onion and register if success or not
             # update our information about the UncertaintyNetwork
             self._attempt_payments(sub_payment.attempts)
+            self._mcf_update_used_channels(sub_payment.attempts)
 
             # run some simple statistics and depict them
             amt, paid_fees, num_paths, number_failed_paths = self._evaluate_attempts(

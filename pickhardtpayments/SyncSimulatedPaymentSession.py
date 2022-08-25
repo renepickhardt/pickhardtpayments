@@ -13,11 +13,13 @@ from .Attempt import Attempt, AttemptStatus
 from .Payment import Payment
 from .UncertaintyNetwork import UncertaintyNetwork
 from .OracleLightningNetwork import OracleLightningNetwork
+from .UncertaintyChannel import DEFAULT_N
 
-from ortools.graph import pywrapgraph
+from MinCostFlow import MCFNetwork
 
 import time
 import networkx as nx
+import sys
 
 DEFAULT_BASE_THRESHOLD = 0
 
@@ -52,27 +54,83 @@ class SyncSimulatedPaymentSession:
     def __init__(self,
                  oracle: OracleLightningNetwork,
                  uncertainty_network: UncertaintyNetwork,
+                 mu = 1, base = 0,                 
                  prune_network: bool = True):
         self._oracle = oracle
         self._uncertainty_network = uncertainty_network
         self._prune_network = prune_network
-        self._prepare_integer_indices_for_nodes()
+        self._mu = mu
+        self._base_fee_threshold = base
+        self._prepare_mcf_solver()
 
-    def _prepare_integer_indices_for_nodes(self):
-        """
-        necessary for the OR-lib by google and the min cost flow solver
+    def _prepare_mcf_demands(self,src,dest,amt: int = 1):
+        # add amount to sending node
+        self._min_cost_flow.SetNodeSupply(
+            src, int(amt))  # /QUANTIZATION))
 
-        let's initialize the look-up tables for node_ids to integers from [0,...,#number of nodes]
-        this is necessary because of the API of the Google Operations Research min cost flow solver
-        """
-        self._mcf_id = {}
-        self._node_key = {}
-        for k, node_id in enumerate(self._uncertainty_network.network.nodes()):
-            self._mcf_id[node_id] = k
-            self._node_key[k] = node_id
-
-    def _prepare_mcf_solver(self, src, dest, amt: int = 1, mu: int = 100_000_000,
-                            base_fee: int = DEFAULT_BASE_THRESHOLD):
+        # add -amount to recipient nods
+        self._min_cost_flow.SetNodeSupply(
+            dest, -int(amt))  # /QUANTIZATION))
+    
+    def _mcf_channel_encode_part(self,channel,part: int=0):
+        direction = 0
+        if channel.src>channel.dest:
+            direction = 1
+        return direction + part*2
+    
+    def _mcf_good_channel(self,channel):
+        # ignore channels with too large base fee
+        if channel.base_fee > self._base_fee_threshold:
+            return False
+        # FIXME: Remove Magic Number for pruning
+        # Prune channels away thay have too low success probability! This is a huge runtime boost
+        # However the pruning would be much better to work on quantiles of normalized cost
+        # So as soon as we have better Scaling, Centralization and feature engineering we can
+        # probably have a more focused pruning
+        if self._prune_network and channel.success_probability(250_000) < 0.9:
+            return False
+        return True
+    
+    def _mcf_delete_channel(self,channel):
+        for part in range(DEFAULT_N):
+            index = self._min_cost_flow.RemoveArc(channel.short_channel_id,
+                                                  self._mcf_channel_encode_part(channel,part))
+            self._arc_to_channel.pop(index)
+    
+    def _mcf_update_channel(self,channel):
+        if not self._mcf_good_channel(channel):
+            self._mcf_delete_channel(channel)
+            return
+        # QUANTIZATION):
+        for part,(capacity, cost) in enumerate(channel.get_piecewise_linearized_costs(mu=self._mu)):
+            self._min_cost_flow.UpdateArc(channel.short_channel_id,
+                                          self._mcf_channel_encode_part(channel,part),
+                                          capacity,
+                                          cost)
+    
+    def _mcf_update_used_channels(self, attempts: List[Attempt]):
+        for attempt in attempts:
+            for channel in attempt.path:
+                self._mcf_update_channel(channel)
+    
+    def _mcf_new_arc(self,channel):
+        if not self._mcf_good_channel(channel):
+            return
+        cnt = 0
+        # QUANTIZATION):
+        for part,(capacity, cost) in enumerate(channel.get_piecewise_linearized_costs(mu=self._mu)):
+            index = self._min_cost_flow.AddArc(channel.src,
+                                               channel.dest,
+                                               channel.short_channel_id,
+                                               self._mcf_channel_encode_part(channel,part),
+                                               capacity,
+                                               cost)
+            self._arc_to_channel[index] = (channel.src, channel.dest, channel, 0)
+            if self._prune_network and cnt > 1:
+                break
+            cnt += 1
+    
+    def _prepare_mcf_solver(self):
         """
         computes the uncertainty network given our prior belief and prepares the min cost flow solver
 
@@ -82,43 +140,15 @@ class SyncSimulatedPaymentSession:
         returns the instantiated min_cost_flow object from the Google OR-lib that contains the piecewise linearized
         problem
         """
-        self._min_cost_flow = pywrapgraph.SimpleMinCostFlow()
+        self._min_cost_flow = MCFNetwork()
         self._arc_to_channel = {}
 
         for s, d, channel in self._uncertainty_network.network.edges(data="channel"):
-            # ignore channels with too large base fee
-            if channel.base_fee > base_fee:
-                continue
-            # FIXME: Remove Magic Number for pruning
-            # Prune channels away that have too low success probability! This is a huge runtime boost
-            # However the pruning would be much better to work on quantiles of normalized cost
-            # So as soon as we have better Scaling, Centralization and feature engineering we can
-            # probably have a more focused pruning
-            if self._prune_network and channel.success_probability(250_000) < 0.9:
-                continue
-            cnt = 0
-            # QUANTIZATION):
-            for capacity, cost in channel.get_piecewise_linearized_costs(mu=mu):
-                index = self._min_cost_flow.AddArcWithCapacityAndUnitCost(self._mcf_id[s],
-                                                                          self._mcf_id[d],
-                                                                          capacity,
-                                                                          cost)
-                self._arc_to_channel[index] = (s, d, channel, 0)
-                if self._prune_network and cnt > 1:
-                    break
-                cnt += 1
+            self._mcf_new_arc(channel)
 
         # Add node supply to 0 for all nodes
         for i in self._uncertainty_network.network.nodes():
-            self._min_cost_flow.SetNodeSupply(self._mcf_id[i], 0)
-
-        # add amount to sending node
-        self._min_cost_flow.SetNodeSupply(
-            self._mcf_id[src], int(amt))  # /QUANTIZATION))
-
-        # add -amount to recipient nods
-        self._min_cost_flow.SetNodeSupply(
-            self._mcf_id[dest], -int(amt))  # /QUANTIZATION))
+            self._min_cost_flow.SetNodeSupply(i, 0)
 
     def _next_hop(self, path):
         """
@@ -168,11 +198,15 @@ class SyncSimulatedPaymentSession:
         """
         # first collect all linearized edges which are assigned a non-zero flow put them into a networkx graph
         G = nx.MultiDiGraph()
-        for i in range(self._min_cost_flow.NumArcs()):
-            flow = self._min_cost_flow.Flow(i)  # *QUANTIZATION
-            if flow == 0:
-                continue
-
+        
+        #for i in range(self._min_cost_flow.NumArcs()):
+        
+        index_list, flow_list = self._min_cost_flow.FlowArray()
+        for i,flow in zip(index_list,flow_list):
+            #flow = self._min_cost_flow.Flow(i)  # *QUANTIZATION
+            #if flow == 0:
+            #    continue
+            # print(i,flow)
             src, dest, channel, _ = self._arc_to_channel[i]
             if G.has_edge(src, dest):
                 if channel.short_channel_id in G[src][dest]:
@@ -204,8 +238,7 @@ class SyncSimulatedPaymentSession:
                     G.remove_edge(src, dest, key=channel.short_channel_id)
         return attempts
 
-    def _generate_candidate_paths(self, src, dest, amt: int, mu: int = 100_000_000,
-                                  base: int = DEFAULT_BASE_THRESHOLD):
+    def _generate_candidate_paths(self, src, dest, amt):
         """
         computes the optimal payment split to deliver `amt` from `src` to `dest` and updates our belief about the
         liquidity
@@ -221,15 +254,16 @@ class SyncSimulatedPaymentSession:
         attempts_in_round = List[Attempt]
 
         # First we prepare the min cost flow by getting arcs from the uncertainty network
-        self._prepare_mcf_solver(src, dest, amt, mu, base)
+        self._prepare_mcf_demands(src, dest, amt)
         start = time.time()
         # print("solving mcf...")
-        status = self._min_cost_flow.Solve()
-
-        if status != self._min_cost_flow.OPTIMAL:
-            print('There was an issue with the min cost flow input.')
-            print(f'Status: {status}')
-            exit(1)
+        try:
+            self._min_cost_flow.Solve()
+            #self._min_cost_flow._Solve_by_AugmentingPaths()
+            #self._min_cost_flow._Solve_by_CostScaling()
+        except:
+            raise BaseException('There was an issue with the min cost flow. Error code %d' %
+                self._min_cost_flow.error_code)
 
         attempts_in_round = self._dissect_flow_to_paths(src, dest)
         end = time.time()
@@ -280,7 +314,7 @@ class SyncSimulatedPaymentSession:
             else:
                 attempt.status = AttemptStatus.FAILED
 
-    def _evaluate_attempts(self, payment: Payment):
+    def _evaluate_attempts(self, payment: Payment, log_out = sys.stdout):
         """
         helper function to collect statistics about attempts and print them
 
@@ -293,42 +327,42 @@ class SyncSimulatedPaymentSession:
         amt = 0
         arrived_attempts = []
         failed_attempts = []
-        print("\nStatistics about {} candidate onions:\n".format(len(payment.attempts)))
-        print("successful attempts:")
-        print("--------------------")
+        print("\nStatistics about {} candidate onions:\n".format(len(payment.attempts)), file=log_out)
+        print("successful attempts:", file=log_out)
+        print("--------------------", file=log_out)
         for arrived_attempt in payment.filter_attempts(AttemptStatus.ARRIVED):
             amt += arrived_attempt.amount
             total_fees += arrived_attempt.routing_fee / 1000.
             expected_sats_to_deliver += arrived_attempt.probability * arrived_attempt.amount
             print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
                 arrived_attempt.probability * 100, arrived_attempt.amount, len(arrived_attempt.path),
-                int(arrived_attempt.routing_fee * 1000 / arrived_attempt.amount)))
+                int(arrived_attempt.routing_fee * 1000 / arrived_attempt.amount)), file=log_out)
             paid_fees += arrived_attempt.routing_fee
 
-        print("\nfailed attempts:")
-        print("----------------")
+        print("\nfailed attempts:", file=log_out)
+        print("----------------", file=log_out)
         for failed_attempt in payment.filter_attempts(AttemptStatus.FAILED):
             amt += failed_attempt.amount
             total_fees += failed_attempt.routing_fee / 1000.
             expected_sats_to_deliver += failed_attempt.probability * failed_attempt.amount
             print(" p = {:6.2f}% amt: {:9} sats  hops: {} ppm: {:5}".format(
                 failed_attempt.probability * 100, failed_attempt.amount, len(failed_attempt.path),
-                int(failed_attempt.routing_fee * 1000 / failed_attempt.amount)))
+                int(failed_attempt.routing_fee * 1000 / failed_attempt.amount)), file=log_out)
             residual_amt += failed_attempt.amount
 
-        print("\nAttempt Summary:")
-        print("=================")
-        print("\nTried to deliver \t{:10} sats".format(amt))
+        print("\nAttempt Summary:", file=log_out)
+        print("=================", file=log_out)
+        print("\nTried to deliver \t{:10} sats".format(amt), file=log_out)
         fraction = expected_sats_to_deliver * 100. / amt
         print("expected to deliver {:10} sats \t({:4.2f}%)".format(
-            int(expected_sats_to_deliver), fraction))
+            int(expected_sats_to_deliver), fraction), file=log_out)
         fraction = (amt - residual_amt) * 100. / (amt)
         print("actually delivered {:10} sats \t({:4.2f}%)".format(
-            amt - residual_amt, fraction))
+            amt - residual_amt, fraction), file=log_out)
         print("deviation: \t\t{:4.2f}".format(
-            (amt - residual_amt) / (expected_sats_to_deliver + 1)))
-        print("planned_fee: {:8.3f} sat".format(total_fees))
-        print("paid fees: {:8.3f} sat".format(paid_fees))
+            (amt - residual_amt) / (expected_sats_to_deliver + 1)), file=log_out)
+        print("planned_fee: {:8.3f} sat".format(total_fees), file=log_out)
+        print("paid fees: {:8.3f} sat".format(paid_fees), file=log_out)
         return residual_amt, paid_fees, len(payment.attempts), len(failed_attempts)
 
     def forget_information(self):
@@ -336,6 +370,7 @@ class SyncSimulatedPaymentSession:
         forgets all the information in the UncertaintyNetwork that is a member of the PaymentSession
         """
         self._uncertainty_network.reset_uncertainty_network()
+        self._min_cost_flow.Forget()
 
     def activate_network_wide_uncertainty_reduction(self, n):
         """
@@ -344,7 +379,7 @@ class SyncSimulatedPaymentSession:
         self._uncertainty_network.activate_network_wide_uncertainty_reduction(
             n, self._oracle)
 
-    def pickhardt_pay(self, src, dest, amt, mu=1, base=DEFAULT_BASE_THRESHOLD):
+    def pickhardt_pay(self, src, dest, amt, log_out = sys.stdout):
         """
         conduct one experiment! might need to call oracle.reset_uncertainty_network() first
         I could not put it here as some experiments require sharing of liquidity information
@@ -363,31 +398,34 @@ class SyncSimulatedPaymentSession:
         # Initialise Payment
         # currently with underscore to not mix up with existing variable 'payment'
         payment = Payment(src, dest, amt)
+        mcf_time = 0
 
         # This is the main payment loop. It is currently blocking and synchronous but may be
         # implemented in a concurrent way. Also, we stop after 10 rounds which is pretty arbitrary
         # a better stop criteria would be if we compute infeasible flows or if the probabilities
         # are too low or residual amounts decrease to slowly
         while amt > 0 and cnt < 10:
-            print("Round number: ", cnt + 1)
-            print("Try to deliver", amt, "satoshi:")
+            print("Round number: ", cnt + 1, file=log_out)
+            print("Try to deliver", amt, "satoshi:", file=log_out)
 
             sub_payment = Payment(payment.sender, payment.receiver, amt)
             # transfer to a min cost flow problem and run the solver
             # paths is the lists of channels, runtime the time it took to calculate all candidates in this round
-            paths, runtime = self._generate_candidate_paths(payment.sender, payment.receiver, amt, mu, base)
+            paths, runtime = self._generate_candidate_paths(payment.sender, payment.receiver, amt)
+            mcf_time += runtime
             sub_payment.add_attempts(paths)
 
             # make attempts, try to send onion and register if success or not
             # update our information about the UncertaintyNetwork
             self._attempt_payments(sub_payment.attempts)
+            self._mcf_update_used_channels(sub_payment.attempts)
 
             # run some simple statistics and depict them
             amt, paid_fees, num_paths, number_failed_paths = self._evaluate_attempts(
-                sub_payment)
+                sub_payment, log_out)
 
-            print("Runtime of flow computation: {:4.2f} sec ".format(runtime))
-            print("\n================================================================\n")
+            print("Runtime of flow computation: {:4.2f} sec ".format(runtime), file=log_out)
+            print("\n================================================================\n", file=log_out)
 
             total_number_failed_paths += number_failed_paths
             total_fees += paid_fees
@@ -395,7 +433,7 @@ class SyncSimulatedPaymentSession:
 
             # add attempts of sub_payment to payment
             payment.add_attempts(sub_payment.attempts)
-
+        
         # When residual amount is 0 / enough successful onions have been found, then settle payment. Else drop onions.
         if amt == 0:
             for onion in payment.filter_attempts(AttemptStatus.ARRIVED):
@@ -409,16 +447,18 @@ class SyncSimulatedPaymentSession:
         payment.end_time = time.time()
 
         entropy_end = self._uncertainty_network.entropy()
-        print("SUMMARY:")
-        print("========")
-        print("Rounds of mcf-computations:\t", cnt)
-        print("Number of attempts made:\t", len(payment.attempts))
-        print("Number of failed attempts:\t", len(list(payment.filter_attempts(AttemptStatus.FAILED))))
+        print("SUMMARY:", file=log_out)
+        print("========", file=log_out)
+        print("Rounds of mcf-computations:\t", cnt, file=log_out)
+        print("Number of attempts made:\t", len(payment.attempts), file=log_out)
+        print("Number of failed attempts:\t", len(list(payment.filter_attempts(AttemptStatus.FAILED))), file=log_out)
         print("Failure rate: {:4.2f}% ".format(
-            len(list(payment.filter_attempts(AttemptStatus.FAILED))) * 100. / len(payment.attempts)))
+            len(list(payment.filter_attempts(AttemptStatus.FAILED))) * 100. / len(payment.attempts)), file=log_out)
         print("total Payment lifetime (including inefficient memory management): {:4.3f} sec".format(
-            payment.end_time - payment.start_time))
-        print("Learnt entropy: {:5.2f} bits".format(entropy_start - entropy_end))
+            payment.end_time - payment.start_time), file=log_out)
+        print("Learnt entropy: {:5.2f} bits".format(entropy_start - entropy_end), file=log_out)
         print("fee for settlement of delivery: {:8.3f} sat --> {} ppm".format(
-            payment.settlement_fees/1000, int(payment.settlement_fees * 1000 / payment.total_amount)))
-        print("used mu:", mu)
+            payment.settlement_fees/1000, int(payment.settlement_fees * 1000 / payment.total_amount)), 
+            file=log_out)
+        print("used mu:", self._mu, file=log_out)
+        return  mcf_time, payment.end_time - payment.start_time

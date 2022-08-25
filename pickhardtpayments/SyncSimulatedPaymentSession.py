@@ -237,11 +237,12 @@ class SyncSimulatedPaymentSession():
         start = time.time()
         #print("solving mcf...")
         try:
-            #self._min_cost_flow.Solve()
-            self._min_cost_flow._Solve_by_AugmentingPaths()
+            self._min_cost_flow.Solve()
+            #self._min_cost_flow._Solve_by_AugmentingPaths()
             #self._min_cost_flow._Solve_by_CostScaling()
         except:
-            raise BaseException('There was an issue with the min cost flow input.')
+            raise BaseException('There was an issue with the min cost flow. Error code %d' %
+                self._min_cost_flow.error_code)
 
         paths = self._disect_flow_to_paths(src, dest)
         end = time.time()

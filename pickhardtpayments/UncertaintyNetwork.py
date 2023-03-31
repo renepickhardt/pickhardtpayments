@@ -123,10 +123,20 @@ class UncertaintyNetwork(ChannelGraph):
         receives a payment attempt and adjusts the balances of the UncertaintyChannels and its reverse channels
         along the path.
         """
-        for uncertainty_channel in attempt.path:
-            # no adjustment on minimum and maximum liquidity of channel and return channel necessary, because
-            # this has already been learnt in send_onion when updating knowledge after info about success of send_onion.
+        for channel in attempt.path:
+            return_channel = self.get_channel(channel.dest,
+                                              channel.src,
+                                              channel.short_channel_id)
 
-            # remove in_flight amount from UncertaintyChannel
-            uncertainty_channel.allocate_inflights(-attempt.amount)
+            if channel.min_liquidity < attempt.amount:
+                raise ValueError
+            channel.min_liquidity = max(0, channel.min_liquidity - attempt.amount)
+            if return_channel:
+                return_channel.min_liquidity = min(max(return_channel.min_liquidity, attempt.amount), return_channel.capacity)
+
+            channel.max_liquidity = max(channel.max_liquidity - attempt.amount, channel.min_liquidity)
+            if return_channel:
+                return_channel.max_liquidity = min(return_channel.max_liquidity + attempt.amount,
+                                               return_channel.capacity)
+
         return 0

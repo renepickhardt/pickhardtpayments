@@ -278,44 +278,66 @@ class UncertaintyChannel(Channel):
         return pieces
     """
 
-    def update_knowledge(self, attempt, return_channel):
+    def update_knowledge(self, amount: int, return_channel, probing_successful: bool):
         """
-        updates our knowledge about the channel if we tried to probe it for amount `amt`
+        Updates our knowledge about the channel after probing with 'send_onion'.
 
-        This API works only if we have an Oracle that allows to ask the actual liquidity of a channel
-        In mainnet Lightning our oracle will not work on a per_channel level. This will change the data
-        flow. Here for simplicity of the simulation we make use of the Oracle on a per channel level
+        'send_onion' already placed the amount as inflight on the UncertaintyChannel. Because we currently don't konw
+        if the payment will be settled successfully, we can only incorporate current knowledge. Any change because of
+        settlement will have to be considered at another location.
 
-        :param amt: The amount that went through when probing the channel, usually in_flight amount plus attempt amount!
-        :type: amt
+        What can we learn from a successfully sent onion?
+        * If we knew that there was a minimum liquidity greater than the in_flights on the channel, than this is fine.
+          Nothing done.
+        * If there was no knowledge about the minimum liquidity, then we now know that it is at least the in_flights.
+        * We learnt nothing about the maximum liquidity in this channel.
+        * Regarding the return channel: We now know that the confirmed inflight amount of this channel cannot be in
+          the return channel. Thus, maximum liquidity needs to be lower than capacity minus in_flight amount.
+
+        What can we learn from a failing onion?
+        * In the channel, the maximum liquidity needs to be lower than the in_flights.
+          We have no further information about the minimum amount that can be sent.
+        * If this amount fails, then we know that at least this amount of liquidity is in the return channel.
+
+
+        # This API works only if we have an Oracle that allows to ask the actual liquidity of a channel
+        # In mainnet Lightning our oracle will not work on a per_channel level. This will change the data
+        # flow. Here for simplicity of the simulation we make use of the Oracle on a per channel level
+
+        :param amount: The amount that went through when probing the channel, usually in_flight amount plus attempt amount!
+        :type: int
+        :param return_channel: The UncertaintyChannel in the return direction, needed to adjust knowledge there.
+        :type: UncertaintyChannel
         :param probing_successful: Could the amount be sent?
         :type: bool
         """
-        amt = attempt.amount
-        # Fixme: here is a mistake - status and probing_result are different!
-
-        if attempt.status == AttemptStatus.INFLIGHT:
-            self.min_liquidity = max(self.min_liquidity, self.in_flight + amt)
-            self.max_liquidity = max(self.max_liquidity, self.in_flight + amt)
+        if probing_successful:
+            self.min_liquidity = max(self.min_liquidity, self.in_flight)
             if return_channel:
-                return_channel.min_liquidity = min(return_channel.min_liquidity,
-                                                        return_channel.capacity - self.in_flight - amt)
                 return_channel.max_liquidity = min(return_channel.max_liquidity,
-                                                        return_channel.capacity - self.in_flight - amt)
+                                                   return_channel.capacity - self.min_liquidity)
             else:
                 logging.debug(f"no return channel in UncertaintyNetwork for {self.short_channel_id}")
-        elif attempt.status == AttemptStatus.FAILED:
-            self.min_liquidity = min(self.min_liquidity, self.in_flight + amt)
-            self.max_liquidity = min(self.max_liquidity, self.in_flight + amt)
+        elif not probing_successful:
+            self.max_liquidity = min(self.max_liquidity, self.in_flight + amount - 1)
             if return_channel:
                 return_channel.min_liquidity = max(return_channel.min_liquidity,
-                                                        return_channel.capacity - amt)
-                return_channel.max_liquidity = max(return_channel.max_liquidity,
-                                                        return_channel.capacity - amt)
+                                                   return_channel.capacity - self.max_liquidity)
             else:
                 logging.debug(f"no return channel in UncertaintyNetwork for {self.short_channel_id}")
         else:
             logging.error("error in update knowledge - wrong status")
+
+        if self.min_liquidity > self.max_liquidity:
+            print("self min = max, {}, in {}-{}".format(self.min_liquidity, self.src[:4], self.dest[:4]))
+            logging.error("self min = max, {}, in {}-{}".format(self.min_liquidity, self.src[:4], self.dest[:4]))
+            exit(-10)
+        if return_channel and return_channel.min_liquidity > return_channel.max_liquidity:
+            print("return min = max, {}, in {}-{}".format(return_channel.min_liquidity, return_channel.src[:4],
+                                                          return_channel.dest[:4]))
+            logging.error("return min = max, {}, in {}-{}".format(return_channel.min_liquidity, return_channel.src[:4],
+                                                                  return_channel.dest[:4]))
+            exit(-20)
 
     # needed for BOLT14 test experiment
     def learn_n_bits(self, oracle: OracleLightningNetwork, n: int = 1):

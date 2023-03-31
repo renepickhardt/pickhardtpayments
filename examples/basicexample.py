@@ -29,3 +29,4 @@ C_OTTO = "027ce055380348d7812d2ae7745701c9f93e70c1adeb2657f053f91df4f2843c71"
 tested_amount = 10_000_000  # 10 million sats
 
 payment_session.pickhardt_pay(RENE, C_OTTO, tested_amount, mu=0, base=0)
+

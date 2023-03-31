@@ -66,11 +66,11 @@ class Attempt:
         self._status = AttemptStatus.PLANNED
 
     def __str__(self):
-        description = "Attempt with {} channels to deliver {:>10,} sats and status {}.".format(len(self._path),
+        description = "Attempt with {} channels to deliver {:>10,} sats and status {}. ".format(len(self._path),
                                                                                           self._amount,
                                                                                           self._status.name)
         if self._routing_fee and self._routing_fee > 0:
-            description += "\nsuccess probability of {:6.2f}% , fee of {:8.3f} sat and a ppm of {:5} ".format(
+            description += "Success probability of {:6.2f}% , fee of {:8.3f} sat and a ppm of {:5} ".format(
                 self._probability * 100, self._routing_fee / 1000, int(self._routing_fee * 1000 / self._amount))
         return description
 

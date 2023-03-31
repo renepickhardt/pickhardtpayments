@@ -4,7 +4,7 @@ SyncSimulatedPaymentSession.py
 The core module of the pickhardt payment project.
 An example payment is executed and statistics are run.
 """
-from .Payment import Payment
+from .Payment import Payment, MCFSolverError
 from .UncertaintyNetwork import UncertaintyNetwork
 from .OracleLightningNetwork import OracleLightningNetwork
 
@@ -71,6 +71,7 @@ class SyncSimulatedPaymentSession:
     def pickhardt_pay(self, src, dest, amt=1, mu=1, base=DEFAULT_BASE_THRESHOLD):
         """
         Conducts one payment with the pickhardt payment methodology.
+        Tries up to 15 rounds or until payment probability of an attempt is less than 5%
 
         :sub_payment.initiate(): starts the first round and calls the solver to get paths. For each path the attempt is
         registered as planned and the amount is registered in the uncertainty network as in_flight.
@@ -90,8 +91,21 @@ class SyncSimulatedPaymentSession:
         are updated in the OracleNetwork on both channels.
         The AttemptStatus is consequently set to SETTLED, which triggers the update of the channels in the
         UncertaintyNetwork.
+
+        amt=1, mu=1, base=DEFAULT_BASE_THRESHOLD, loglevel="info"
+        :param src: node id of the sending node
+        :type: str
+        :param dest: node id of the receiving node
+        :type: str
+        :param amt: amount in satoshi to be sent
+        :type: int
+        :param mu: controls the balance between uncertainty cost and fees in the solver
+        :type: int
+        :param base: eliminates all channels with a base fee lower than `base`
+        :type: int
         """
         session_logger.info('*** new pickhardt payment ***')
+        probability_too_low = False
 
         # Initialise Payment
         payment = Payment(self.uncertainty_network, self.oracle_network, src, dest, amt, mu, base)
@@ -101,12 +115,18 @@ class SyncSimulatedPaymentSession:
         # a better stop criteria would be if we compute infeasible flows or if the probabilities
         # are too low or residual amounts decrease to slowly
         # TODO add 'expected value' to break condition for loop
-        while payment.residual_amount > 0 and payment.pickhardt_payment_rounds <= 15:
+        while payment.residual_amount > 0 and payment.pickhardt_payment_rounds <= 15 and not probability_too_low:
+            payment.increment_pickhardt_payment_rounds()
             sub_payment = Payment(self.uncertainty_network, self.oracle_network, payment.sender, payment.receiver,
                                   payment.residual_amount, mu, base)
 
             # transfer to a min cost flow problem and run the solver. Attempts for payment are generated.
-            sub_payment.initiate()
+            try:
+                sub_payment.initiate()
+            except MCFSolverError as err:
+                logging.error(err)
+                logging.error("Payment failed. No path found.")
+                return -1, 0
 
             # Try to send amounts in attempts and registers if success or not
             # update our information regarding the in_flights in the UncertaintyNetwork and OracleNetwork
@@ -114,16 +134,36 @@ class SyncSimulatedPaymentSession:
 
             # run some simple statistics and depict them
             sub_payment.evaluate_attempts()
+            if sub_payment.attempts[-1].probability < 0.05:
+                probability_too_low = True
+                logging.warning("probability in last attempt too low")
 
             # add attempts of sub_payment to payment
             payment.register_sub_payment(sub_payment)
 
         # When residual amount is 0 then settle payment.
         if payment.residual_amount == 0:
+            # for attempt in payment.attempts:
+            #    logging.debug("___")
+            #    for channel in attempt.path:
+            #        logging.debug("- " + channel.src[0:4] + " to " + channel.dest[0:4] + ", " + str(attempt.amount))
             payment.execute()
+            logging.debug("Payment successful.")
         else:
-            session_logger.info("Payment failed!")
+            session_logger.error("Payment failed!")
             session_logger.info("residual amount: {:>10,} sats".format(payment.residual_amount))
+
+        # cleanup of in_flights in Networks
+        for attempt in payment.attempts:
+            for uncertainty_channel in attempt.path:
+                uncertainty_channel.in_flight = 0
+                self.oracle_network.get_channel(uncertainty_channel.src, uncertainty_channel.dest,
+                                                uncertainty_channel.short_channel_id).in_flight = 0
 
         # Final Stats
         payment.get_summary()
+
+        if payment.residual_amount:
+            return payment.residual_amount, 0
+        else:
+            return 0, payment.settlement_fees

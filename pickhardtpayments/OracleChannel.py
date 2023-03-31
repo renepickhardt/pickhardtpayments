@@ -66,7 +66,7 @@ class OracleChannel(Channel):
         """
         if 0 <= in_flight_amt <= self.capacity:
             self._in_flight = in_flight_amt
-            logging.debug("in_flight on {}-{} now {:,} ".format(self.src, self.dest, in_flight_amt))
+            logging.debug("in_flight on {}-{} now {:,} ".format(self.src[:4], self.dest[:4], in_flight_amt))
         else:
             raise ValueError(f"inflight amount for channel {self.short_channel_id} cannot be set. "
                              f"Amount {in_flight_amt} is negative or higher than capacity")

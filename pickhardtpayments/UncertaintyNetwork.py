@@ -140,3 +140,16 @@ class UncertaintyNetwork(ChannelGraph):
                                                return_channel.capacity)
 
         return 0
+
+    def consistency_check(self, oracle_lightning_network: OracleLightningNetwork):#
+        # Consistency Check
+        false_guess = 0
+        for ch in self.network.edges:
+            channel = self.get_channel(ch[0], ch[1], ch[2])
+            oracle_channel = oracle_lightning_network.get_channel(ch[0], ch[1], ch[2])
+            liquidity_hit = (oracle_channel.actual_liquidity <= channel.max_liquidity) and \
+                            (oracle_channel.actual_liquidity >= channel.min_liquidity)
+            if not liquidity_hit:
+                false_guess += 1
+        if false_guess > 0:
+            logging.warning("number of channels with false knowledge in UncertaintyNetwork: {}".format(false_guess))

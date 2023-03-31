@@ -30,3 +30,6 @@ tested_amount = 10_000_000  # 10 million sats
 
 payment_session.pickhardt_pay(RENE, C_OTTO, tested_amount, mu=0, base=0)
 
+uncertainty_network.consistency_check(oracle_lightning_network)
+
+

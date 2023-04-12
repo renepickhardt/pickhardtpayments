@@ -1,5 +1,6 @@
 .DS_Store
 __pycache__
+venv
 .idea
 pickhardtpayments/pickhardtpayments.egg-info
 pickhardtpayments/__pycache__
@@ -8,4 +9,10 @@ pickhardtpayments/__pycache__
 *.json
 examples/.json
 
+# from documentation
+docs
+
 pickhardt_pay.log
+
+# avoid workbook
+examples/PickhardtPaymentsExample.ipynb

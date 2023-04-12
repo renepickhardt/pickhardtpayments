@@ -329,12 +329,9 @@ class UncertaintyChannel(Channel):
             logging.error("error in update knowledge - wrong status")
 
         if self.min_liquidity > self.max_liquidity:
-            print("self min = max, {}, in {}-{}".format(self.min_liquidity, self.src[:4], self.dest[:4]))
             logging.error("self min = max, {}, in {}-{}".format(self.min_liquidity, self.src[:4], self.dest[:4]))
             exit(-10)
         if return_channel and return_channel.min_liquidity > return_channel.max_liquidity:
-            print("return min = max, {}, in {}-{}".format(return_channel.min_liquidity, return_channel.src[:4],
-                                                          return_channel.dest[:4]))
             logging.error("return min = max, {}, in {}-{}".format(return_channel.min_liquidity, return_channel.src[:4],
                                                                   return_channel.dest[:4]))
             exit(-20)

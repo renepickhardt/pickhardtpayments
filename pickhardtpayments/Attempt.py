@@ -49,6 +49,12 @@ class Attempt:
             self._amount = amount
         else:
             raise ValueError("amount for payment attempts needs to be positive")
+        if isinstance(path, list):
+            for c in path:
+                if not isinstance(c, Channel):
+                    raise ValueError("Path argument in Attempt instantiation does not contain a List of Instances of Channel Class")
+        else:
+            raise ValueError("Path argument in Attempt instantiation is not a list.")
 
         i = 1
         valid_path = True

@@ -6,7 +6,7 @@ The **PickhardtPayments** package is a collection of classes and interfaces that
 What are Pickhardt Payments?
 ----------------------------
 
-Pickhardt Payments are the method of deliverying satoshis from on Lightning network Node to another by using `probabilistic payment delivery <https://arxiv.org/abs/2103.08576>`_ in a round based payment loop that updeates our belief of the remote liquidity in the Uncertainty Network and generates `optimally reliable and cheap payment flows <https://arxiv.org/abs/2107.05322>`_ in every round by solving a `piece wise linearized min integer cost flow problem <https://github.com/renepickhardt/mpp-splitter/blob/pickhardt-payments-simulation-dev/Minimal%20Linearized%20min%20cost%20flow%20example%20for%20MPP.ipynb>`_ with a separable cost function.
+Pickhardt Payments are the method of delivering satoshis from one Lightning network Node to another by using `probabilistic payment delivery <https://arxiv.org/abs/2103.08576>`_ in a round-based payment loop that updates our belief of the remote liquidity in the Uncertainty Network and generates `optimally reliable and cheap payment flows <https://arxiv.org/abs/2107.05322>`_ in every round by solving a `piece wise linearized min integer cost flow problem <https://github.com/renepickhardt/mpp-splitter/blob/pickhardt-payments-simulation-dev/Minimal%20Linearized%20min%20cost%20flow%20example%20for%20MPP.ipynb>`_ with a separable cost function.
 
 As of now the two main features of the cost function are the linearized_uncertainty_unit_cost (effectively proportional to 1/channel_capacity) and the linearized_routing_unit_cost (effectively just the ppm).
 
@@ -23,7 +23,7 @@ The dependencies can be found at:
 build and install
 -----------------
 
-One step install is via pip by typing pip install pickhardtpayments on your command line
+One step install is via pip by typing `pip install pickhardtpayments` on your command line
 
 If you want to build and install the library yourself you can do:
 
@@ -47,8 +47,8 @@ This is a very stripped down example that shows how to run the library. Have a l
     from pickhardtpayments.OracleLightningNetwork import OracleLightningNetwork
     from pickhardtpayments.SyncSimulatedPaymentSession import SyncSimulatedPaymentSession
 
-    # we first need to import the channel graph from c-lightning jsondump
-    # you can get your own data set via:
+    # we first need to import the channel graph from core-lightning jsondump
+    # you can get your own dataset via:
     # $: lightning-cli listchannels > listchannels20220412.json
     # alternatively you can go to https://ln.rene-pickhardt.de to find a data dump
     channel_graph = ChannelGraph("listchannels20220412.json")
